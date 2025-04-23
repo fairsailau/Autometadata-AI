@@ -158,9 +158,14 @@ class AutomatedWorkflowManager:
                 logger.warning("No folders configured for monitoring")
                 return
             
-            # Get webhook URL
+            # Get webhook URL - Use dynamic URL generation based on Streamlit's server info
             webhook_port = config.get_webhook_port()
-            webhook_url = f"https://your-server-address:{webhook_port}/webhook"
+            
+            # For local development, use localhost
+            base_url = os.environ.get('WEBHOOK_BASE_URL', 'http://localhost')
+            webhook_url = f"{base_url}:{webhook_port}/webhook"
+            
+            logger.info(f"Using webhook URL: {webhook_url}")
             
             # Register webhooks for each folder
             for folder in monitored_folders:
