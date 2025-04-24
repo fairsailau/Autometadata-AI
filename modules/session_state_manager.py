@@ -163,3 +163,6 @@ def debug_session_state():
     
     logger.info(f"Session state debug info: {debug_info}")
     return debug_info
+
+# Add an alias for backward compatibility
+initialize_session_state = initialize_app_session_state
