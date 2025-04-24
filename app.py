@@ -34,7 +34,6 @@ from modules.session_state_manager import initialize_session_state, get_session_
 from modules.configuration_interface import (
     render_workflow_selection,
     render_configuration_interface,
-    render_monitoring_dashboard,
     get_automated_workflow_config
 )
 from modules.integration import (
@@ -66,11 +65,7 @@ def main():
         
         # Display automated workflow configuration if selected
         if workflow_mode == "automated":
-            render_configuration_interface(client)
-            
-            # Display monitoring dashboard if authenticated
-            if client and st.session_state.authenticated:
-                render_monitoring_dashboard(client)
+            render_configuration_interface()
         
         # Display manual workflow navigation if selected
         elif workflow_mode == "manual":

@@ -1,17 +1,17 @@
 """
-Configuration interface module for automated workflow.
-This module provides interfaces for configuring the automated workflow.
+Configuration interface module for the Box Metadata Extraction application.
+This module provides the configuration interface for the application.
 """
 
-import os
-import json
-import logging
 import streamlit as st
+import logging
+import json
+import os
 from typing import Dict, Any, List, Optional, Tuple, Union
-from datetime import datetime
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, 
+                   format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class AutomatedWorkflowConfig:
@@ -20,8 +20,9 @@ class AutomatedWorkflowConfig:
     """
     
     def __init__(self):
-        """Initialize the configuration."""
-        self.config_path = os.path.join(os.path.dirname(__file__), '..', '.config', 'automated_workflow.json')
+        """Initialize configuration."""
+        self.config_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".config")
+        self.config_file = os.path.join(self.config_dir, "automated_workflow.json")
         self.config = self._load_config()
     
     def _load_config(self) -> Dict[str, Any]:
@@ -31,177 +32,162 @@ class AutomatedWorkflowConfig:
         Returns:
             dict: Configuration
         """
-        if os.path.exists(self.config_path):
-            try:
-                with open(self.config_path, 'r') as f:
-                    return json.load(f)
-            except Exception as e:
-                logger.error(f"Error loading configuration: {str(e)}")
+        # Create config directory if it doesn't exist
+        if not os.path.exists(self.config_dir):
+            os.makedirs(self.config_dir)
         
-        # Return default configuration if file doesn't exist or has errors
-        return {
-            "enabled": False,
-            "webhook_port": 5000,
-            "confidence_threshold": 0.7,
-            "monitored_folders": [],
-            "category_template_mapping": {},
-            "ai_model": "default",
-            "last_updated": datetime.now().isoformat()
-        }
-    
-    def _save_config(self):
-        """Save configuration to file."""
+        # Create config file if it doesn't exist
+        if not os.path.exists(self.config_file):
+            default_config = {
+                "monitored_folders": [],
+                "category_template_mapping": {},
+                "ai_model": "default",
+                "webhook_port": 5000,
+                "webhook_enabled": True,
+                "advanced_settings": {
+                    "confidence_threshold": 0.7,
+                    "auto_apply_metadata": False,
+                    "notification_enabled": False,
+                    "notification_email": ""
+                }
+            }
+            
+            with open(self.config_file, "w") as f:
+                json.dump(default_config, f, indent=2)
+            
+            return default_config
+        
+        # Load config from file
         try:
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
-            
-            # Update last updated timestamp
-            self.config["last_updated"] = datetime.now().isoformat()
-            
-            # Save configuration
-            with open(self.config_path, 'w') as f:
-                json.dump(self.config, f, indent=2)
+            with open(self.config_file, "r") as f:
+                return json.load(f)
         except Exception as e:
-            logger.error(f"Error saving configuration: {str(e)}")
+            logger.error(f"Error loading config: {str(e)}")
+            return {}
     
-    def is_enabled(self) -> bool:
+    def _save_config(self) -> bool:
         """
-        Check if automated workflow is enabled.
+        Save configuration to file.
         
         Returns:
-            bool: True if enabled, False otherwise
+            bool: True if successful, False otherwise
         """
-        return self.config.get("enabled", False)
-    
-    def set_enabled(self, enabled: bool):
-        """
-        Set whether automated workflow is enabled.
-        
-        Args:
-            enabled: Whether automated workflow is enabled
-        """
-        self.config["enabled"] = enabled
-        self._save_config()
-    
-    def get_webhook_port(self) -> int:
-        """
-        Get webhook port.
-        
-        Returns:
-            int: Webhook port
-        """
-        return self.config.get("webhook_port", 5000)
-    
-    def set_webhook_port(self, port: int):
-        """
-        Set webhook port.
-        
-        Args:
-            port: Webhook port
-        """
-        self.config["webhook_port"] = port
-        self._save_config()
-    
-    def get_confidence_threshold(self) -> float:
-        """
-        Get confidence threshold.
-        
-        Returns:
-            float: Confidence threshold
-        """
-        return self.config.get("confidence_threshold", 0.7)
-    
-    def set_confidence_threshold(self, threshold: float):
-        """
-        Set confidence threshold.
-        
-        Args:
-            threshold: Confidence threshold
-        """
-        self.config["confidence_threshold"] = threshold
-        self._save_config()
+        try:
+            # Create config directory if it doesn't exist
+            if not os.path.exists(self.config_dir):
+                os.makedirs(self.config_dir)
+            
+            # Save config to file
+            with open(self.config_file, "w") as f:
+                json.dump(self.config, f, indent=2)
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error saving config: {str(e)}")
+            return False
     
     def get_monitored_folders(self) -> List[Dict[str, Any]]:
         """
         Get monitored folders.
         
         Returns:
-            list: List of monitored folders
+            list: Monitored folders
         """
         return self.config.get("monitored_folders", [])
     
-    def add_monitored_folder(self, folder_id: str, folder_name: str):
+    def add_monitored_folder(self, folder_id: str, folder_name: str) -> bool:
         """
-        Add a monitored folder.
+        Add monitored folder.
         
         Args:
-            folder_id: Box folder ID
-            folder_name: Box folder name
+            folder_id: Folder ID
+            folder_name: Folder name
+            
+        Returns:
+            bool: True if successful, False otherwise
         """
         # Check if folder already exists
         for folder in self.get_monitored_folders():
             if folder.get("id") == folder_id:
-                return
+                return False
         
         # Add folder
-        monitored_folders = self.get_monitored_folders()
-        monitored_folders.append({
+        self.config.setdefault("monitored_folders", []).append({
             "id": folder_id,
-            "name": folder_name,
-            "added_at": datetime.now().isoformat()
+            "name": folder_name
         })
         
-        self.config["monitored_folders"] = monitored_folders
-        self._save_config()
+        # Save config
+        return self._save_config()
     
-    def remove_monitored_folder(self, folder_id: str):
+    def remove_monitored_folder(self, folder_id: str) -> bool:
         """
-        Remove a monitored folder.
+        Remove monitored folder.
         
         Args:
-            folder_id: Box folder ID
+            folder_id: Folder ID
+            
+        Returns:
+            bool: True if successful, False otherwise
         """
-        monitored_folders = self.get_monitored_folders()
-        self.config["monitored_folders"] = [f for f in monitored_folders if f.get("id") != folder_id]
-        self._save_config()
+        # Check if folder exists
+        folders = self.get_monitored_folders()
+        for i, folder in enumerate(folders):
+            if folder.get("id") == folder_id:
+                # Remove folder
+                del folders[i]
+                self.config["monitored_folders"] = folders
+                
+                # Save config
+                return self._save_config()
+        
+        return False
     
     def get_category_template_mapping(self) -> Dict[str, str]:
         """
         Get category to template mapping.
         
         Returns:
-            dict: Mapping from category to template ID
+            dict: Category to template mapping
         """
         return self.config.get("category_template_mapping", {})
     
-    def set_category_template_mapping(self, category: str, template_id: str):
+    def set_category_template_mapping(self, category: str, template_id: str) -> bool:
         """
         Set category to template mapping.
         
         Args:
             category: Document category
-            template_id: Metadata template ID
+            template_id: Template ID
+            
+        Returns:
+            bool: True if successful, False otherwise
         """
-        category_template_mapping = self.get_category_template_mapping()
-        category_template_mapping[category] = template_id
+        # Set mapping
+        self.config.setdefault("category_template_mapping", {})[category] = template_id
         
-        self.config["category_template_mapping"] = category_template_mapping
-        self._save_config()
+        # Save config
+        return self._save_config()
     
-    def remove_category_template_mapping(self, category: str):
+    def remove_category_template_mapping(self, category: str) -> bool:
         """
         Remove category to template mapping.
         
         Args:
             category: Document category
-        """
-        category_template_mapping = self.get_category_template_mapping()
-        
-        if category in category_template_mapping:
-            del category_template_mapping[category]
             
-            self.config["category_template_mapping"] = category_template_mapping
-            self._save_config()
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Check if mapping exists
+        if category in self.get_category_template_mapping():
+            # Remove mapping
+            del self.config["category_template_mapping"][category]
+            
+            # Save config
+            return self._save_config()
+        
+        return False
     
     def get_ai_model(self) -> str:
         """
@@ -212,105 +198,145 @@ class AutomatedWorkflowConfig:
         """
         return self.config.get("ai_model", "default")
     
-    def set_ai_model(self, model: str):
+    def set_ai_model(self, model: str) -> bool:
         """
         Set AI model.
         
         Args:
             model: AI model
+            
+        Returns:
+            bool: True if successful, False otherwise
         """
+        # Set model
         self.config["ai_model"] = model
-        self._save_config()
+        
+        # Save config
+        return self._save_config()
     
-    def get_config(self) -> Dict[str, Any]:
+    def get_webhook_port(self) -> int:
         """
-        Get full configuration.
+        Get webhook port.
         
         Returns:
-            dict: Configuration
+            int: Webhook port
         """
-        return self.config
-
-
-# Global instance
-_config = None
-
-def get_automated_workflow_config() -> AutomatedWorkflowConfig:
-    """
-    Get the global configuration instance.
+        return self.config.get("webhook_port", 5000)
     
-    Returns:
-        AutomatedWorkflowConfig: Global configuration instance
-    """
-    global _config
+    def set_webhook_port(self, port: int) -> bool:
+        """
+        Set webhook port.
+        
+        Args:
+            port: Webhook port
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Set port
+        self.config["webhook_port"] = port
+        
+        # Save config
+        return self._save_config()
     
-    if _config is None:
-        _config = AutomatedWorkflowConfig()
+    def get_webhook_enabled(self) -> bool:
+        """
+        Get webhook enabled.
+        
+        Returns:
+            bool: Webhook enabled
+        """
+        return self.config.get("webhook_enabled", True)
     
-    return _config
+    def set_webhook_enabled(self, enabled: bool) -> bool:
+        """
+        Set webhook enabled.
+        
+        Args:
+            enabled: Webhook enabled
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Set enabled
+        self.config["webhook_enabled"] = enabled
+        
+        # Save config
+        return self._save_config()
+    
+    def get_advanced_settings(self) -> Dict[str, Any]:
+        """
+        Get advanced settings.
+        
+        Returns:
+            dict: Advanced settings
+        """
+        return self.config.get("advanced_settings", {})
+    
+    def set_advanced_setting(self, key: str, value: Any) -> bool:
+        """
+        Set advanced setting.
+        
+        Args:
+            key: Setting key
+            value: Setting value
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Set setting
+        self.config.setdefault("advanced_settings", {})[key] = value
+        
+        # Save config
+        return self._save_config()
 
 
 class ConfigurationInterface:
     """
-    Interface for configuring automated workflow.
+    Configuration interface for the Box Metadata Extraction application.
     """
     
-    def __init__(self, client=None):
-        """
-        Initialize the configuration interface.
-        
-        Args:
-            client: Box client instance
-        """
-        self.client = client
-        self.config = get_automated_workflow_config()
+    def __init__(self):
+        """Initialize configuration interface."""
+        self.config = AutomatedWorkflowConfig()
         logger.info("ConfigurationInterface initialized")
-    
-    def set_client(self, client):
-        """
-        Set the Box client.
-        
-        Args:
-            client: Box client instance
-        """
-        self.client = client
-        logger.info("Client set in ConfigurationInterface")
     
     def render_workflow_selection(self):
         """Render workflow selection interface."""
-        st.header("Workflow Mode")
-        logger.info("Rendering workflow selection interface")
-        
-        # Get current mode
-        is_automated = self.config.is_enabled()
-        
-        # Create radio button for mode selection
-        mode = st.radio(
-            "Select Workflow Mode",
-            ["Manual", "Automated"],
-            index=1 if is_automated else 0
-        )
-        
-        # Update configuration if mode changed
-        if (mode == "Automated") != is_automated:
-            self.config.set_enabled(mode == "Automated")
+        try:
+            st.header("Workflow Mode")
             
-            # Show success message
-            if mode == "Automated":
-                st.success("Automated workflow enabled")
-            else:
-                st.success("Manual workflow enabled")
-                
-        # Return the selected mode to allow app.py to respond to it
-        return mode.lower()
+            # Get current workflow mode
+            if "workflow_mode" not in st.session_state:
+                st.session_state.workflow_mode = "manual"
+            
+            # Workflow mode selection
+            st.write("Select Workflow Mode")
+            workflow_mode = st.radio(
+                "Select Workflow Mode",
+                options=["Manual", "Automated"],
+                index=0 if st.session_state.workflow_mode == "manual" else 1,
+                label_visibility="collapsed"
+            )
+            
+            # Update workflow mode
+            st.session_state.workflow_mode = workflow_mode.lower()
+            
+            logger.info("Workflow selection interface rendered successfully")
+        except Exception as e:
+            logger.error(f"Error rendering workflow selection: {str(e)}", exc_info=True)
+            st.error(f"Error rendering workflow selection: {str(e)}")
     
     def render_configuration_interface(self):
         """Render configuration interface."""
         try:
-            st.header("Automated Workflow Configuration")
-            logger.info("Rendering configuration interface")
+            # Check if workflow mode is automated
+            if st.session_state.workflow_mode != "automated":
+                return
             
-            # Create tabs for configuration sections
+            st.header("Automated Workflow Configuration")
+            
+            # Create tabs for different configuration sections
             tabs = st.tabs([
                 "Folder Selection",
                 "Template Mapping",
@@ -318,47 +344,52 @@ class ConfigurationInterface:
                 "Advanced Settings"
             ])
             
-            # Tab 1: Folder Selection
+            # Folder selection tab
             with tabs[0]:
                 self._render_folder_selection()
             
-            # Tab 2: Template Mapping
+            # Template mapping tab
             with tabs[1]:
                 self._render_template_mapping()
             
-            # Tab 3: AI Model
+            # AI model tab
             with tabs[2]:
                 self._render_ai_model_selection()
             
-            # Tab 4: Advanced Settings
+            # Advanced settings tab
             with tabs[3]:
                 self._render_advanced_settings()
-                
+            
             logger.info("Configuration interface rendered successfully")
         except Exception as e:
             logger.error(f"Error rendering configuration interface: {str(e)}", exc_info=True)
             st.error(f"Error rendering configuration interface: {str(e)}")
-            import traceback
-            st.code(traceback.format_exc())
     
     def _render_folder_selection(self):
         """Render folder selection interface."""
         try:
-            st.subheader("Monitored Folders")
-            st.write("Select folders to monitor for automated metadata extraction.")
+            st.subheader("Folder Selection")
+            st.write("Select folders to monitor for new files.")
             
-            # Display current monitored folders
+            # Get monitored folders
             monitored_folders = self.config.get_monitored_folders()
             
+            # Display monitored folders
             if monitored_folders:
                 st.write("Currently monitored folders:")
+                
                 for folder in monitored_folders:
-                    col1, col2 = st.columns([3, 1])
+                    col1, col2, col3 = st.columns([2, 2, 1])
+                    
                     with col1:
-                        st.write(f"📁 {folder.get('name', 'Unknown')} ({folder.get('id', 'Unknown')})")
+                        st.write(f"**{folder.get('name', 'Unknown')}**")
+                    
                     with col2:
-                        if st.button("Remove", key=f"remove_folder_{folder.get('id')}"):
-                            self.config.remove_monitored_folder(folder.get('id'))
+                        st.write(f"ID: {folder.get('id', 'Unknown')}")
+                    
+                    with col3:
+                        if st.button("Remove", key=f"remove_folder_{folder.get('id', 'Unknown')}"):
+                            self.config.remove_monitored_folder(folder.get('id', 'Unknown'))
                             st.rerun()
             else:
                 st.info("No folders are currently being monitored.")
@@ -367,136 +398,139 @@ class ConfigurationInterface:
             st.write("---")
             st.write("Add a new folder to monitor:")
             
-            # Check if authenticated
-            if not st.session_state.authenticated:
-                st.warning("Please authenticate with Box to add folders")
-                return
+            # Folder browser
+            if st.session_state.authenticated and st.session_state.client:
+                # Get root folder
+                root_folder = st.session_state.client.folder(folder_id="0").get()
                 
-            # Enhanced folder selection with folder browser
-            use_browser = st.checkbox("Use folder browser", value=True, 
-                                     help="Browse your Box folders instead of entering folder ID manually")
-            
-            if use_browser:
-                # Implement folder browser
-                st.write("#### Browse Box Folders")
-                
-                # Initialize folder navigation state if not exists
-                if "folder_nav" not in st.session_state:
-                    st.session_state.folder_nav = {
-                        "current_folder_id": "0",  # Root folder
+                # Initialize folder navigation state
+                if "folder_navigation" not in st.session_state:
+                    st.session_state.folder_navigation = {
+                        "current_folder_id": "0",
                         "current_folder_name": "All Files",
-                        "folder_path": [{"id": "0", "name": "All Files"}],
-                        "selected_folder_id": None,
-                        "selected_folder_name": None
+                        "folder_path": [{"id": "0", "name": "All Files"}]
                     }
                 
-                # Display current path
-                path_html = " / ".join([f"<a href='#' id='{folder['id']}'>{folder['name']}</a>" 
-                                      for folder in st.session_state.folder_nav["folder_path"]])
-                st.markdown(f"**Path:** {path_html}", unsafe_allow_html=True)
+                # Display current folder path
+                path_str = " / ".join([f"{folder['name']}" for folder in st.session_state.folder_navigation["folder_path"]])
+                st.write(f"Current location: {path_str}")
                 
-                # Get current folder contents
-                try:
-                    current_folder_id = st.session_state.folder_nav["current_folder_id"]
-                    folder_items = st.session_state.client.folder(folder_id=current_folder_id).get_items(limit=100)
+                # Get current folder
+                current_folder_id = st.session_state.folder_navigation["current_folder_id"]
+                current_folder = st.session_state.client.folder(folder_id=current_folder_id).get()
+                
+                # Display folder contents
+                folder_items = current_folder.get_items(limit=100)
+                
+                # Filter only folders
+                folders = [item for item in folder_items if item.type == "folder"]
+                
+                # Display folders
+                if folders:
+                    st.write("Select a folder:")
                     
-                    # Filter to only show folders
-                    folders = [item for item in folder_items if item.type == "folder"]
+                    # Create columns for folder display
+                    cols = st.columns(3)
                     
-                    if folders:
-                        # Display folders
-                        st.write("**Select a folder:**")
+                    # Display folders in columns
+                    for i, folder in enumerate(folders):
+                        col_idx = i % 3
+                        with cols[col_idx]:
+                            if st.button(f"📁 {folder.name}", key=f"folder_{folder.id}"):
+                                # Navigate to folder
+                                st.session_state.folder_navigation["current_folder_id"] = folder.id
+                                st.session_state.folder_navigation["current_folder_name"] = folder.name
+                                st.session_state.folder_navigation["folder_path"].append({
+                                    "id": folder.id,
+                                    "name": folder.name
+                                })
+                                st.rerun()
+                else:
+                    st.info("No folders found in the current location.")
+                
+                # Back button
+                if len(st.session_state.folder_navigation["folder_path"]) > 1:
+                    if st.button("⬅️ Back to parent folder"):
+                        # Remove current folder from path
+                        st.session_state.folder_navigation["folder_path"].pop()
                         
-                        # Create a grid layout for folders
-                        cols = st.columns(3)
-                        for i, folder in enumerate(folders):
-                            col_idx = i % 3
-                            with cols[col_idx]:
-                                if st.button(f"📁 {folder.name}", key=f"folder_{folder.id}"):
-                                    # Navigate to this folder
-                                    st.session_state.folder_nav["current_folder_id"] = folder.id
-                                    st.session_state.folder_nav["current_folder_name"] = folder.name
-                                    st.session_state.folder_nav["folder_path"].append({
-                                        "id": folder.id,
-                                        "name": folder.name
-                                    })
-                                    st.rerun()
-                    else:
-                        st.info("No subfolders found in this location.")
-                    
-                    # Option to go back
-                    if len(st.session_state.folder_nav["folder_path"]) > 1:
-                        if st.button("⬅️ Go Back", key="go_back_folder"):
-                            # Remove current folder from path
-                            st.session_state.folder_nav["folder_path"].pop()
-                            # Set current folder to the last one in the path
-                            last_folder = st.session_state.folder_nav["folder_path"][-1]
-                            st.session_state.folder_nav["current_folder_id"] = last_folder["id"]
-                            st.session_state.folder_nav["current_folder_name"] = last_folder["name"]
-                            st.rerun()
-                    
-                    # Select current folder button
-                    current_folder_name = st.session_state.folder_nav["current_folder_name"]
-                    current_folder_id = st.session_state.folder_nav["current_folder_id"]
-                    
-                    if st.button(f"Select Current Folder: {current_folder_name}", key="select_current_folder"):
-                        # Add this folder to monitored folders
-                        self.config.add_monitored_folder(current_folder_id, current_folder_name)
-                        st.success(f"Added folder: {current_folder_name}")
+                        # Set current folder to parent
+                        parent = st.session_state.folder_navigation["folder_path"][-1]
+                        st.session_state.folder_navigation["current_folder_id"] = parent["id"]
+                        st.session_state.folder_navigation["current_folder_name"] = parent["name"]
                         
-                        # Reset folder navigation
-                        st.session_state.folder_nav = {
-                            "current_folder_id": "0",
-                            "current_folder_name": "All Files",
-                            "folder_path": [{"id": "0", "name": "All Files"}],
-                            "selected_folder_id": None,
-                            "selected_folder_name": None
-                        }
                         st.rerun()
                 
-                except Exception as e:
-                    st.error(f"Error browsing folders: {str(e)}")
-                    logger.error(f"Error browsing folders: {str(e)}", exc_info=True)
-            
+                # Add current folder button
+                if current_folder_id != "0":  # Don't allow adding the root folder
+                    if st.button("➕ Add current folder for monitoring"):
+                        # Add folder to monitored folders
+                        self.config.add_monitored_folder(
+                            current_folder_id,
+                            st.session_state.folder_navigation["current_folder_name"]
+                        )
+                        st.success(f"Added folder '{st.session_state.folder_navigation['current_folder_name']}' to monitored folders.")
+                        st.rerun()
             else:
-                # Manual folder ID input
-                folder_id = st.text_input("Folder ID")
-                folder_name = st.text_input("Folder Name (optional)")
-                
-                if st.button("Add Folder"):
-                    if folder_id:
-                        if not folder_name:
-                            # Try to get folder name from Box
-                            try:
-                                folder = st.session_state.client.folder(folder_id).get()
-                                folder_name = folder.name
-                            except Exception as e:
-                                st.error(f"Error retrieving folder name: {str(e)}")
-                                folder_name = f"Folder {folder_id}"
-                        
-                        self.config.add_monitored_folder(folder_id, folder_name)
-                        st.success(f"Added folder: {folder_name}")
-                        st.rerun()
-                    else:
-                        st.error("Please enter a folder ID")
+                st.warning("Please authenticate with Box to browse folders.")
+                return
             
-            # Event stream integration section
+            # Manual folder entry
             st.write("---")
-            st.subheader("Event Stream Integration")
-            st.write("Configure Box event stream to automatically process new files.")
+            st.write("Or enter folder details manually:")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                folder_id = st.text_input("Folder ID")
+            
+            with col2:
+                folder_name = st.text_input("Folder Name")
+            
+            if st.button("Add Folder", key="add_folder_manual"):
+                if folder_id and folder_name:
+                    # Add folder to monitored folders
+                    self.config.add_monitored_folder(folder_id, folder_name)
+                    st.success(f"Added folder '{folder_name}' to monitored folders.")
+                    st.rerun()
+                else:
+                    st.error("Please enter both folder ID and name.")
+            
+            # Webhook configuration
+            st.write("---")
+            st.subheader("Webhook Configuration")
+            
+            # Webhook enabled checkbox
+            webhook_enabled = st.checkbox(
+                "Enable webhook for automatic processing",
+                value=self.config.get_webhook_enabled()
+            )
+            
+            if webhook_enabled != self.config.get_webhook_enabled():
+                self.config.set_webhook_enabled(webhook_enabled)
+            
+            # Webhook port
+            webhook_port = st.number_input(
+                "Webhook port",
+                min_value=1000,
+                max_value=65535,
+                value=self.config.get_webhook_port(),
+                help="Port to listen for webhook events"
+            )
+            
+            if webhook_port != self.config.get_webhook_port():
+                self.config.set_webhook_port(webhook_port)
             
             # Webhook setup instructions
             with st.expander("Webhook Setup Instructions", expanded=False):
-                st.write("""
-                ### Setting up Box Webhooks with ngrok
+                st.markdown("""
+                ### Setting up Box Webhooks
                 
-                Box webhooks require a public URL that can receive webhook notifications. Since localhost URLs aren't allowed, we'll use ngrok to create a secure tunnel.
+                Box webhooks allow automatic processing of files when they are uploaded or modified.
                 
-                #### Step 1: Install ngrok
+                #### Step 1: Start the webhook server
                 
-                1. Download ngrok from [https://ngrok.com/download](https://ngrok.com/download)
-                2. Sign up for a free ngrok account to get your authtoken
-                3. Set up ngrok by running: `ngrok config add-authtoken YOUR_AUTH_TOKEN`
+                The webhook server is automatically started when you run this application.
                 
                 #### Step 2: Start ngrok tunnel
                 
@@ -584,19 +618,31 @@ class ConfigurationInterface:
                     templates = st.session_state.metadata_templates
                     st.info(f"Using {len(templates)} cached metadata templates.")
             
-            # Get document categories
-            # In a real implementation, this would come from the document categorization module
-            # For now, we'll use a placeholder list
-            categories = [
-                "Invoice", 
-                "Contract", 
-                "Resume", 
-                "Report", 
-                "Letter", 
-                "Form", 
-                "Receipt", 
-                "Other"
-            ]
+            # Get document categories from document_categorization.py
+            try:
+                # These are the document types defined in document_categorization.py
+                categories = [
+                    "Sales Contract",
+                    "Invoices",
+                    "Tax",
+                    "Financial Report",
+                    "Employment Contract",
+                    "PII",
+                    "Other"
+                ]
+            except Exception as e:
+                # Fallback categories if there's an error
+                categories = [
+                    "Invoice", 
+                    "Contract", 
+                    "Resume", 
+                    "Report", 
+                    "Letter", 
+                    "Form", 
+                    "Receipt", 
+                    "Other"
+                ]
+                logger.error(f"Error retrieving document categories: {str(e)}", exc_info=True)
             
             # Get current mappings
             mappings = self.config.get_category_template_mapping()
@@ -614,10 +660,18 @@ class ConfigurationInterface:
                     with col2:
                         # Find template name
                         template_name = "Unknown Template"
-                        for template in templates:
-                            if template.get("id") == template_id:
-                                template_name = template.get("templateKey", "Unknown Template")
-                                break
+                        if isinstance(templates, dict):
+                            # If templates is a dictionary (key-value pairs)
+                            if template_id in templates:
+                                template_obj = templates[template_id]
+                                if isinstance(template_obj, dict):
+                                    template_name = template_obj.get("templateKey", "Unknown Template")
+                        elif isinstance(templates, list):
+                            # If templates is a list of dictionaries
+                            for template in templates:
+                                if isinstance(template, dict) and template.get("id") == template_id:
+                                    template_name = template.get("templateKey", "Unknown Template")
+                                    break
                         
                         st.write(template_name)
                     
@@ -637,11 +691,23 @@ class ConfigurationInterface:
             
             # Template selection
             template_options = [{"id": "", "name": "Select a template..."}]
-            for template in templates:
-                template_options.append({
-                    "id": template.get("id", ""),
-                    "name": template.get("templateKey", "Unknown Template")
-                })
+            
+            if isinstance(templates, dict):
+                # If templates is a dictionary (key-value pairs)
+                for template_id, template in templates.items():
+                    if isinstance(template, dict):
+                        template_options.append({
+                            "id": template_id,
+                            "name": template.get("templateKey", "Unknown Template")
+                        })
+            elif isinstance(templates, list):
+                # If templates is a list of dictionaries
+                for template in templates:
+                    if isinstance(template, dict):
+                        template_options.append({
+                            "id": template.get("id", ""),
+                            "name": template.get("templateKey", "Unknown Template")
+                        })
             
             selected_template = st.selectbox(
                 "Metadata Template",
@@ -698,47 +764,56 @@ class ConfigurationInterface:
                 format_func=lambda x: next((m["name"] for m in models if m["id"] == x), "Unknown")
             )
             
-            # Model description
-            model_descriptions = {
-                "default": "Uses Box's built-in AI capabilities for metadata extraction.",
-                "azure__openai__gpt_4o": "Most capable model for complex metadata extraction tasks. Higher cost but better accuracy.",
-                "azure__openai__gpt_4o_mini": "Balanced model with good performance and reasonable cost.",
-                "azure__openai__gpt_35_turbo": "Fast and cost-effective model. Good for simple metadata extraction tasks.",
-                "google__gemini_2_0_flash_001": "Google's fast and efficient model for quick metadata extraction.",
-                "google__gemini_2_0_flash_lite_preview": "Lightweight version of Gemini 2.0 Flash, optimized for speed.",
-                "google__gemini_1_5_flash_001": "Efficient model for routine metadata extraction tasks.",
-                "google__gemini_1_5_pro_001": "More powerful Google model for complex document understanding.",
-                "aws__claude_3_haiku": "Fast and efficient Claude model for routine metadata extraction.",
-                "aws__claude_3_sonnet": "Balanced Claude model with good performance for most tasks.",
-                "aws__claude_3_5_sonnet": "Enhanced Claude model with improved accuracy.",
-                "aws__claude_3_7_sonnet": "Latest Claude model with advanced capabilities.",
-                "aws__titan_text_lite": "Amazon's lightweight model for basic metadata extraction."
-            }
+            # Save model selection
+            if selected_model != current_model:
+                self.config.set_ai_model(selected_model)
+                st.success(f"AI model updated to {selected_model}")
             
-            if selected_model in model_descriptions:
-                st.info(model_descriptions[selected_model])
+            # Display model information
+            with st.expander("Model Information", expanded=False):
+                st.markdown("""
+                ### Box AI Models
+                
+                Box AI supports various models from different providers:
+                
+                #### Azure OpenAI Models
+                - **GPT-4o**: Latest and most capable model, best for complex tasks
+                - **GPT-4o Mini**: Smaller, faster version of GPT-4o
+                - **GPT-3.5 Turbo**: Good balance of performance and speed
+                
+                #### Google Models
+                - **Gemini 2.0 Flash**: Fast, efficient model for quick responses
+                - **Gemini 2.0 Flash Lite**: Lightweight version of Gemini 2.0 Flash
+                - **Gemini 1.5 Flash**: Fast model with good performance
+                - **Gemini 1.5 Pro**: More capable model for complex tasks
+                
+                #### AWS Models
+                - **Claude 3 Haiku**: Fast, efficient model for quick responses
+                - **Claude 3 Sonnet**: Good balance of performance and speed
+                - **Claude 3.5 Sonnet**: Improved version of Claude 3 Sonnet
+                - **Claude 3.7 Sonnet**: Latest Claude model with enhanced capabilities
+                - **Titan Text Lite**: Lightweight model for basic tasks
+                
+                For more information, see the [Box AI documentation](https://developer.box.com/guides/box-ai/ai-models/).
+                """)
             
             # Model comparison
             with st.expander("Model Comparison", expanded=False):
-                st.write("""
+                st.markdown("""
                 ### Model Comparison
                 
-                | Model | Speed | Cost | Accuracy | Best For |
-                | ----- | ----- | ---- | -------- | -------- |
-                | GPT-4o | Medium | High | Highest | Complex documents, legal contracts |
-                | GPT-4o Mini | Fast | Medium | High | Most business documents |
-                | GPT-3.5 Turbo | Very Fast | Low | Good | Simple documents, high volume |
-                | Gemini 2.0 Flash | Fast | Medium | High | General purpose extraction |
-                | Claude 3 Sonnet | Medium | Medium | High | Detailed analysis, compliance |
-                | Claude 3 Haiku | Fast | Low | Good | Quick extraction, high volume |
-                | Titan Text Lite | Very Fast | Low | Good | Basic metadata, high volume |
+                | Model | Speed | Quality | Use Case |
+                | ----- | ----- | ------- | -------- |
+                | GPT-4o | Medium | Excellent | Complex document analysis |
+                | GPT-4o Mini | Fast | Very Good | Balanced performance |
+                | GPT-3.5 Turbo | Very Fast | Good | High-volume processing |
+                | Gemini 2.0 Flash | Fast | Very Good | Quick analysis |
+                | Gemini 1.5 Pro | Medium | Excellent | Detailed extraction |
+                | Claude 3 Haiku | Very Fast | Good | Simple documents |
+                | Claude 3.5 Sonnet | Medium | Excellent | Complex documents |
+                | Titan Text Lite | Very Fast | Basic | Simple metadata |
                 """)
             
-            # Save button
-            if st.button("Save Model Selection"):
-                self.config.set_ai_model(selected_model)
-                st.success(f"AI model set to: {selected_model}")
-                
             logger.info("AI model selection interface rendered successfully")
         except Exception as e:
             logger.error(f"Error rendering AI model selection: {str(e)}", exc_info=True)
@@ -748,55 +823,96 @@ class ConfigurationInterface:
         """Render advanced settings interface."""
         try:
             st.subheader("Advanced Settings")
-            st.write("Configure advanced settings for the automated workflow.")
+            st.write("Configure advanced settings for automated workflow.")
             
-            # Webhook port
-            current_port = self.config.get_webhook_port()
-            new_port = st.number_input(
-                "Webhook Port",
-                min_value=1024,
-                max_value=65535,
-                value=current_port,
-                help="Port to use for the webhook server. Must be between 1024 and 65535."
-            )
+            # Get current settings
+            settings = self.config.get_advanced_settings()
             
             # Confidence threshold
-            current_threshold = self.config.get_confidence_threshold()
-            new_threshold = st.slider(
-                "Confidence Threshold",
+            confidence_threshold = st.slider(
+                "Confidence threshold",
                 min_value=0.0,
                 max_value=1.0,
-                value=current_threshold,
+                value=settings.get("confidence_threshold", 0.7),
                 step=0.05,
-                help="Minimum confidence level required for automated categorization."
+                help="Minimum confidence level required for automatic metadata application"
             )
             
-            # Save button
-            if st.button("Save Advanced Settings"):
-                # Update webhook port
-                if new_port != current_port:
-                    self.config.set_webhook_port(new_port)
-                
-                # Update confidence threshold
-                if new_threshold != current_threshold:
-                    self.config.set_confidence_threshold(new_threshold)
-                
-                st.success("Advanced settings saved")
+            if confidence_threshold != settings.get("confidence_threshold"):
+                self.config.set_advanced_setting("confidence_threshold", confidence_threshold)
             
-            # Reset configuration button
+            # Auto-apply metadata
+            auto_apply = st.checkbox(
+                "Automatically apply metadata",
+                value=settings.get("auto_apply_metadata", False),
+                help="When enabled, metadata will be applied automatically if confidence is above threshold"
+            )
+            
+            if auto_apply != settings.get("auto_apply_metadata"):
+                self.config.set_advanced_setting("auto_apply_metadata", auto_apply)
+            
+            # Notification settings
             st.write("---")
-            st.subheader("Reset Configuration")
-            st.warning("This will reset all automated workflow configuration to default values.")
+            st.write("Notification Settings")
             
-            if st.button("Reset Configuration", key="reset_config"):
-                # Create a new configuration instance
-                global _config
-                _config = AutomatedWorkflowConfig()
-                self.config = _config
-                
-                st.success("Configuration reset to default values")
-                st.rerun()
-                
+            # Enable notifications
+            notifications_enabled = st.checkbox(
+                "Enable email notifications",
+                value=settings.get("notification_enabled", False),
+                help="Send email notifications when files are processed"
+            )
+            
+            if notifications_enabled != settings.get("notification_enabled"):
+                self.config.set_advanced_setting("notification_enabled", notifications_enabled)
+            
+            # Email address
+            email = st.text_input(
+                "Notification email",
+                value=settings.get("notification_email", ""),
+                disabled=not notifications_enabled
+            )
+            
+            if email != settings.get("notification_email") and notifications_enabled:
+                self.config.set_advanced_setting("notification_email", email)
+            
+            # Processing settings
+            st.write("---")
+            st.write("Processing Settings")
+            
+            # Max concurrent processes
+            max_processes = st.number_input(
+                "Maximum concurrent processes",
+                min_value=1,
+                max_value=10,
+                value=settings.get("max_processes", 2),
+                help="Maximum number of files to process concurrently"
+            )
+            
+            if max_processes != settings.get("max_processes"):
+                self.config.set_advanced_setting("max_processes", max_processes)
+            
+            # Processing timeout
+            timeout = st.number_input(
+                "Processing timeout (seconds)",
+                min_value=30,
+                max_value=600,
+                value=settings.get("processing_timeout", 120),
+                help="Maximum time to spend processing a single file"
+            )
+            
+            if timeout != settings.get("processing_timeout"):
+                self.config.set_advanced_setting("processing_timeout", timeout)
+            
+            # Debug mode
+            debug_mode = st.checkbox(
+                "Enable debug mode",
+                value=settings.get("debug_mode", False),
+                help="Enable additional logging and debugging information"
+            )
+            
+            if debug_mode != settings.get("debug_mode"):
+                self.config.set_advanced_setting("debug_mode", debug_mode)
+            
             logger.info("Advanced settings interface rendered successfully")
         except Exception as e:
             logger.error(f"Error rendering advanced settings: {str(e)}", exc_info=True)
@@ -806,109 +922,54 @@ class ConfigurationInterface:
         """Render monitoring dashboard."""
         try:
             st.header("Monitoring Dashboard")
-            st.write("This dashboard shows the status of the automated workflow.")
+            st.write("Monitor automated workflow processing.")
             
-            # Check if event stream is running
-            from modules.integration import is_event_stream_running
-            event_stream_status = is_event_stream_running()
+            # Placeholder for monitoring dashboard
+            st.info("Monitoring dashboard is under development.")
             
-            # Display status
-            st.subheader("System Status")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.metric(
-                    label="Event Stream",
-                    value="Running" if event_stream_status else "Stopped"
-                )
-            
-            with col2:
-                st.metric(
-                    label="Monitored Folders",
-                    value=len(self.config.get_monitored_folders())
-                )
-            
-            # Display recent activity
-            st.subheader("Recent Activity")
-            
-            # In a real implementation, this would come from a database or log file
-            # For now, we'll use placeholder data
-            if st.session_state.authenticated and st.session_state.client:
-                st.write("Connected to Box as: " + st.session_state.user.name)
-                
-                # Placeholder activity data
-                st.write("No recent activity to display.")
-            else:
-                st.warning("Not connected to Box. Please authenticate first.")
-                
             logger.info("Monitoring dashboard rendered successfully")
         except Exception as e:
             logger.error(f"Error rendering monitoring dashboard: {str(e)}", exc_info=True)
             st.error(f"Error rendering monitoring dashboard: {str(e)}")
 
 
-# Global instance
-_interface = None
-
-def get_configuration_interface(client=None) -> ConfigurationInterface:
+def get_automated_workflow_config():
     """
-    Get the global configuration interface instance.
-    
-    Args:
-        client: Box client instance
-        
-    Returns:
-        ConfigurationInterface: Global configuration interface instance
-    """
-    global _interface
-    
-    if _interface is None:
-        _interface = ConfigurationInterface(client)
-    elif client is not None:
-        _interface.set_client(client)
-    
-    return _interface
-
-
-# Add standalone functions that create an instance of ConfigurationInterface and call its methods
-def render_workflow_selection(client=None):
-    """
-    Standalone function to render workflow selection interface.
-    
-    Args:
-        client: Box client instance
+    Get automated workflow configuration.
     
     Returns:
-        str: Selected workflow mode
+        AutomatedWorkflowConfig: Configuration
+    """
+    return AutomatedWorkflowConfig()
+
+
+def get_configuration_interface():
+    """
+    Get configuration interface.
+    
+    Returns:
+        ConfigurationInterface: Configuration interface
+    """
+    return ConfigurationInterface()
+
+
+def render_workflow_selection():
+    """
+    Render workflow selection interface.
+    
+    This is a standalone function that can be called from the main app.
     """
     logger.info("Calling render_workflow_selection standalone function")
-    config_interface = get_configuration_interface(client)
-    return config_interface.render_workflow_selection()
+    interface = ConfigurationInterface()
+    interface.render_workflow_selection()
 
-def render_configuration_interface(client=None):
+
+def render_configuration_interface():
     """
-    Standalone function to render configuration interface.
+    Render configuration interface.
     
-    Args:
-        client: Box client instance
+    This is a standalone function that can be called from the main app.
     """
     logger.info("Calling render_configuration_interface standalone function")
-    config_interface = get_configuration_interface(client)
-    
-    # Store client in session state for use in other parts of the application
-    if client and not st.session_state.client:
-        st.session_state.client = client
-        
-    config_interface.render_configuration_interface()
-
-def render_monitoring_dashboard(client=None):
-    """
-    Standalone function to render monitoring dashboard.
-    
-    Args:
-        client: Box client instance
-    """
-    logger.info("Calling render_monitoring_dashboard standalone function")
-    config_interface = get_configuration_interface(client)
-    config_interface.render_monitoring_dashboard()
+    interface = ConfigurationInterface()
+    interface.render_configuration_interface()
