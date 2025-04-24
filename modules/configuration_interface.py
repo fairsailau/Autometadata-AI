@@ -367,116 +367,118 @@ class ConfigurationInterface:
             st.write("---")
             st.write("Add a new folder to monitor:")
             
-            if self.client:
-                # Enhanced folder selection with folder browser
-                use_browser = st.checkbox("Use folder browser", value=True, 
-                                         help="Browse your Box folders instead of entering folder ID manually")
+            # Check if authenticated
+            if not st.session_state.authenticated:
+                st.warning("Please authenticate with Box to add folders")
+                return
                 
-                if use_browser:
-                    # Implement folder browser
-                    st.write("#### Browse Box Folders")
+            # Enhanced folder selection with folder browser
+            use_browser = st.checkbox("Use folder browser", value=True, 
+                                     help="Browse your Box folders instead of entering folder ID manually")
+            
+            if use_browser:
+                # Implement folder browser
+                st.write("#### Browse Box Folders")
+                
+                # Initialize folder navigation state if not exists
+                if "folder_nav" not in st.session_state:
+                    st.session_state.folder_nav = {
+                        "current_folder_id": "0",  # Root folder
+                        "current_folder_name": "All Files",
+                        "folder_path": [{"id": "0", "name": "All Files"}],
+                        "selected_folder_id": None,
+                        "selected_folder_name": None
+                    }
+                
+                # Display current path
+                path_html = " / ".join([f"<a href='#' id='{folder['id']}'>{folder['name']}</a>" 
+                                      for folder in st.session_state.folder_nav["folder_path"]])
+                st.markdown(f"**Path:** {path_html}", unsafe_allow_html=True)
+                
+                # Get current folder contents
+                try:
+                    current_folder_id = st.session_state.folder_nav["current_folder_id"]
+                    folder_items = st.session_state.client.folder(folder_id=current_folder_id).get_items(limit=100)
                     
-                    # Initialize folder navigation state if not exists
-                    if "folder_nav" not in st.session_state:
+                    # Filter to only show folders
+                    folders = [item for item in folder_items if item.type == "folder"]
+                    
+                    if folders:
+                        # Display folders
+                        st.write("**Select a folder:**")
+                        
+                        # Create a grid layout for folders
+                        cols = st.columns(3)
+                        for i, folder in enumerate(folders):
+                            col_idx = i % 3
+                            with cols[col_idx]:
+                                if st.button(f"📁 {folder.name}", key=f"folder_{folder.id}"):
+                                    # Navigate to this folder
+                                    st.session_state.folder_nav["current_folder_id"] = folder.id
+                                    st.session_state.folder_nav["current_folder_name"] = folder.name
+                                    st.session_state.folder_nav["folder_path"].append({
+                                        "id": folder.id,
+                                        "name": folder.name
+                                    })
+                                    st.rerun()
+                    else:
+                        st.info("No subfolders found in this location.")
+                    
+                    # Option to go back
+                    if len(st.session_state.folder_nav["folder_path"]) > 1:
+                        if st.button("⬅️ Go Back", key="go_back_folder"):
+                            # Remove current folder from path
+                            st.session_state.folder_nav["folder_path"].pop()
+                            # Set current folder to the last one in the path
+                            last_folder = st.session_state.folder_nav["folder_path"][-1]
+                            st.session_state.folder_nav["current_folder_id"] = last_folder["id"]
+                            st.session_state.folder_nav["current_folder_name"] = last_folder["name"]
+                            st.rerun()
+                    
+                    # Select current folder button
+                    current_folder_name = st.session_state.folder_nav["current_folder_name"]
+                    current_folder_id = st.session_state.folder_nav["current_folder_id"]
+                    
+                    if st.button(f"Select Current Folder: {current_folder_name}", key="select_current_folder"):
+                        # Add this folder to monitored folders
+                        self.config.add_monitored_folder(current_folder_id, current_folder_name)
+                        st.success(f"Added folder: {current_folder_name}")
+                        
+                        # Reset folder navigation
                         st.session_state.folder_nav = {
-                            "current_folder_id": "0",  # Root folder
+                            "current_folder_id": "0",
                             "current_folder_name": "All Files",
                             "folder_path": [{"id": "0", "name": "All Files"}],
                             "selected_folder_id": None,
                             "selected_folder_name": None
                         }
-                    
-                    # Display current path
-                    path_html = " / ".join([f"<a href='#' id='{folder['id']}'>{folder['name']}</a>" 
-                                          for folder in st.session_state.folder_nav["folder_path"]])
-                    st.markdown(f"**Path:** {path_html}", unsafe_allow_html=True)
-                    
-                    # Get current folder contents
-                    try:
-                        current_folder_id = st.session_state.folder_nav["current_folder_id"]
-                        folder_items = self.client.folder(folder_id=current_folder_id).get_items(limit=100)
-                        
-                        # Filter to only show folders
-                        folders = [item for item in folder_items if item.type == "folder"]
-                        
-                        if folders:
-                            # Display folders
-                            st.write("**Select a folder:**")
-                            
-                            # Create a grid layout for folders
-                            cols = st.columns(3)
-                            for i, folder in enumerate(folders):
-                                col_idx = i % 3
-                                with cols[col_idx]:
-                                    if st.button(f"📁 {folder.name}", key=f"folder_{folder.id}"):
-                                        # Navigate to this folder
-                                        st.session_state.folder_nav["current_folder_id"] = folder.id
-                                        st.session_state.folder_nav["current_folder_name"] = folder.name
-                                        st.session_state.folder_nav["folder_path"].append({
-                                            "id": folder.id,
-                                            "name": folder.name
-                                        })
-                                        st.rerun()
-                        else:
-                            st.info("No subfolders found in this location.")
-                        
-                        # Option to go back
-                        if len(st.session_state.folder_nav["folder_path"]) > 1:
-                            if st.button("⬅️ Go Back", key="go_back_folder"):
-                                # Remove current folder from path
-                                st.session_state.folder_nav["folder_path"].pop()
-                                # Set current folder to the last one in the path
-                                last_folder = st.session_state.folder_nav["folder_path"][-1]
-                                st.session_state.folder_nav["current_folder_id"] = last_folder["id"]
-                                st.session_state.folder_nav["current_folder_name"] = last_folder["name"]
-                                st.rerun()
-                        
-                        # Select current folder button
-                        current_folder_name = st.session_state.folder_nav["current_folder_name"]
-                        current_folder_id = st.session_state.folder_nav["current_folder_id"]
-                        
-                        if st.button(f"Select Current Folder: {current_folder_name}", key="select_current_folder"):
-                            # Add this folder to monitored folders
-                            self.config.add_monitored_folder(current_folder_id, current_folder_name)
-                            st.success(f"Added folder: {current_folder_name}")
-                            
-                            # Reset folder navigation
-                            st.session_state.folder_nav = {
-                                "current_folder_id": "0",
-                                "current_folder_name": "All Files",
-                                "folder_path": [{"id": "0", "name": "All Files"}],
-                                "selected_folder_id": None,
-                                "selected_folder_name": None
-                            }
-                            st.rerun()
-                    
-                    except Exception as e:
-                        st.error(f"Error browsing folders: {str(e)}")
-                        logger.error(f"Error browsing folders: {str(e)}", exc_info=True)
+                        st.rerun()
                 
-                else:
-                    # Manual folder ID input
-                    folder_id = st.text_input("Folder ID")
-                    folder_name = st.text_input("Folder Name (optional)")
-                    
-                    if st.button("Add Folder"):
-                        if folder_id:
-                            if not folder_name:
-                                # Try to get folder name from Box
-                                try:
-                                    folder = self.client.folder(folder_id).get()
-                                    folder_name = folder.name
-                                except Exception as e:
-                                    st.error(f"Error retrieving folder name: {str(e)}")
-                                    folder_name = f"Folder {folder_id}"
-                            
-                            self.config.add_monitored_folder(folder_id, folder_name)
-                            st.success(f"Added folder: {folder_name}")
-                            st.rerun()
-                        else:
-                            st.error("Please enter a folder ID")
+                except Exception as e:
+                    st.error(f"Error browsing folders: {str(e)}")
+                    logger.error(f"Error browsing folders: {str(e)}", exc_info=True)
+            
             else:
-                st.warning("Please authenticate with Box to add folders")
+                # Manual folder ID input
+                folder_id = st.text_input("Folder ID")
+                folder_name = st.text_input("Folder Name (optional)")
+                
+                if st.button("Add Folder"):
+                    if folder_id:
+                        if not folder_name:
+                            # Try to get folder name from Box
+                            try:
+                                folder = st.session_state.client.folder(folder_id).get()
+                                folder_name = folder.name
+                            except Exception as e:
+                                st.error(f"Error retrieving folder name: {str(e)}")
+                                folder_name = f"Folder {folder_id}"
+                        
+                        self.config.add_monitored_folder(folder_id, folder_name)
+                        st.success(f"Added folder: {folder_name}")
+                        st.rerun()
+                    else:
+                        st.error("Please enter a folder ID")
             
             # Event stream integration section
             st.write("---")
@@ -486,38 +488,63 @@ class ConfigurationInterface:
             # Webhook setup instructions
             with st.expander("Webhook Setup Instructions", expanded=False):
                 st.write("""
-                ### Setting up Box Webhooks
+                ### Setting up Box Webhooks with ngrok
+                
+                Box webhooks require a public URL that can receive webhook notifications. Since localhost URLs aren't allowed, we'll use ngrok to create a secure tunnel.
+                
+                #### Step 1: Install ngrok
+                
+                1. Download ngrok from [https://ngrok.com/download](https://ngrok.com/download)
+                2. Sign up for a free ngrok account to get your authtoken
+                3. Set up ngrok by running: `ngrok config add-authtoken YOUR_AUTH_TOKEN`
+                
+                #### Step 2: Start ngrok tunnel
+                
+                Run this command in a terminal to create a tunnel to your webhook port:
+                ```
+                ngrok http 5000
+                ```
+                
+                #### Step 3: Configure Box webhook
                 
                 1. Go to the [Box Developer Console](https://app.box.com/developers/console)
                 2. Create a new app or select your existing app
                 3. Navigate to the 'Webhooks' section
                 4. Create a new webhook with the following settings:
-                   - Target URL: Use the webhook URL shown below
+                   - Target URL: Use the ngrok URL (e.g., https://a1b2-c3d4-e5f6.ngrok.io/webhook)
                    - Triggers: Select 'FILE.UPLOADED' and 'FILE.COPIED'
                    - Address: Select the folders you want to monitor
                 5. Save the webhook configuration
+                
+                #### Step 4: Start your webhook server
+                
+                The webhook server will automatically start when you run this application.
                 """)
             
             # Get webhook URL
             webhook_port = self.config.get_webhook_port()
-            base_url = os.environ.get('WEBHOOK_BASE_URL', 'http://localhost')
-            webhook_url = f"{base_url}:{webhook_port}/webhook"
             
-            st.code(webhook_url, language="text")
-            st.info("Use this URL when configuring webhooks in the Box Developer Console.")
+            # Display ngrok instructions
+            st.subheader("Webhook URL")
+            st.info("""
+            Box webhooks require a public URL. You need to use ngrok to expose your local webhook server.
             
-            # Test webhook connection
-            if st.button("Test Webhook Connection"):
-                try:
-                    # Simulate a webhook test
-                    import requests
-                    response = requests.get(webhook_url, timeout=5)
-                    if response.status_code == 200:
-                        st.success("Webhook endpoint is accessible!")
-                    else:
-                        st.warning(f"Webhook endpoint returned status code: {response.status_code}")
-                except Exception as e:
-                    st.error(f"Error testing webhook connection: {str(e)}")
+            After starting ngrok with `ngrok http 5000`, enter the ngrok URL below:
+            """)
+            
+            # Input for ngrok URL
+            ngrok_url = st.text_input("ngrok URL (e.g., https://a1b2-c3d4-e5f6.ngrok.io)")
+            
+            if ngrok_url:
+                webhook_url = f"{ngrok_url}/webhook"
+                st.code(webhook_url, language="text")
+                st.success("Use this URL when configuring webhooks in the Box Developer Console.")
+                
+                # Save ngrok URL to config
+                if "ngrok_url" not in self.config.config or self.config.config["ngrok_url"] != ngrok_url:
+                    self.config.config["ngrok_url"] = ngrok_url
+                    self.config._save_config()
+                    st.success("ngrok URL saved to configuration")
             
             logger.info("Folder selection interface rendered successfully")
         except Exception as e:
@@ -530,24 +557,32 @@ class ConfigurationInterface:
             st.subheader("Template Mapping")
             st.write("Map document categories to metadata templates.")
             
+            # Check if authenticated
+            if not st.session_state.authenticated:
+                st.warning("Please authenticate with Box to retrieve metadata templates.")
+                return
+            
             # Get metadata templates
             templates = []
-            if self.client:
-                try:
-                    from modules.metadata_template_retrieval import get_metadata_templates
-                    templates = get_metadata_templates(self.client)
-                    
-                    # Store templates in session state for reuse
-                    if "metadata_templates" not in st.session_state or not st.session_state.metadata_templates:
-                        st.session_state.metadata_templates = templates
-                    
-                    if not templates:
-                        st.warning("No metadata templates found. Please create templates in Box.")
-                except Exception as e:
-                    st.error(f"Error retrieving metadata templates: {str(e)}")
-                    logger.error(f"Error retrieving metadata templates: {str(e)}", exc_info=True)
-            else:
-                st.warning("Please authenticate with Box to retrieve metadata templates.")
+            try:
+                from modules.metadata_template_retrieval import get_metadata_templates
+                # Force refresh templates to ensure we have the latest data
+                templates = get_metadata_templates(st.session_state.client, force_refresh=True)
+                
+                # Store templates in session state for reuse
+                if templates:
+                    st.session_state.metadata_templates = templates
+                    st.success(f"Successfully retrieved {len(templates)} metadata templates from Box.")
+                else:
+                    st.warning("No metadata templates found. Please create templates in Box.")
+            except Exception as e:
+                st.error(f"Error retrieving metadata templates: {str(e)}")
+                logger.error(f"Error retrieving metadata templates: {str(e)}", exc_info=True)
+                
+                # Try to use cached templates if available
+                if "metadata_templates" in st.session_state and st.session_state.metadata_templates:
+                    templates = st.session_state.metadata_templates
+                    st.info(f"Using {len(templates)} cached metadata templates.")
             
             # Get document categories
             # In a real implementation, this would come from the document categorization module
@@ -747,20 +782,6 @@ class ConfigurationInterface:
                     self.config.set_confidence_threshold(new_threshold)
                 
                 st.success("Advanced settings saved")
-                
-            # Webhook URL information
-            st.write("---")
-            st.subheader("Webhook Information")
-            
-            # Get webhook URL - Use dynamic URL generation based on Streamlit's server info
-            webhook_port = self.config.get_webhook_port()
-            
-            # For local development, use localhost
-            base_url = os.environ.get('WEBHOOK_BASE_URL', 'http://localhost')
-            webhook_url = f"{base_url}:{webhook_port}/webhook"
-            
-            st.code(webhook_url)
-            st.info("Use this URL when configuring webhooks in the Box Developer Console.")
             
             # Reset configuration button
             st.write("---")
@@ -813,8 +834,8 @@ class ConfigurationInterface:
             
             # In a real implementation, this would come from a database or log file
             # For now, we'll use placeholder data
-            if self.client:
-                st.write("Connected to Box as: " + self.client.user().get().name)
+            if st.session_state.authenticated and st.session_state.client:
+                st.write("Connected to Box as: " + st.session_state.user.name)
                 
                 # Placeholder activity data
                 st.write("No recent activity to display.")
@@ -874,6 +895,11 @@ def render_configuration_interface(client=None):
     """
     logger.info("Calling render_configuration_interface standalone function")
     config_interface = get_configuration_interface(client)
+    
+    # Store client in session state for use in other parts of the application
+    if client and not st.session_state.client:
+        st.session_state.client = client
+        
     config_interface.render_configuration_interface()
 
 def render_monitoring_dashboard(client=None):
