@@ -16,7 +16,7 @@ from modules.authentication import authenticate
 from modules.file_browser import file_browser
 from modules.document_categorization import categorize_document
 from modules.metadata_template_retrieval import get_metadata_templates
-from modules.metadata_config import display_metadata_config
+from modules.metadata_config import metadata_config
 from modules.processing import process_files
 from modules.results_viewer import display_results
 from modules.direct_metadata_application_enhanced_fixed import apply_metadata_to_files
