@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Import modules
 from modules.authentication import authenticate
-from modules.file_browser import display_file_browser
+from modules.file_browser import file_browser
 from modules.document_categorization import categorize_document
 from modules.metadata_template_retrieval import get_metadata_templates
 from modules.metadata_config import display_metadata_config
