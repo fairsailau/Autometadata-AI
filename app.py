@@ -63,9 +63,13 @@ def main():
         # Display authentication section
         client = authenticate()
         
-        # Display automated workflow configuration if selected
-        if workflow_mode == "automated":
+        # Display automated workflow configuration if selected and authenticated
+        if workflow_mode == "automated" and client and st.session_state.authenticated:
+            # Ensure client is available in session state
+            st.session_state.client = client
             render_configuration_interface()
+        elif workflow_mode == "automated" and not (client and st.session_state.authenticated):
+            st.warning("Please authenticate with Box to configure automated workflow.")
         
         # Display manual workflow navigation if selected
         elif workflow_mode == "manual":
