@@ -19,7 +19,7 @@ from modules.metadata_template_retrieval import get_metadata_templates
 from modules.metadata_config import metadata_config
 from modules.processing import process_files
 from modules.results_viewer import view_results
-from modules.direct_metadata_application_enhanced_fixed import apply_metadata_to_files
+from modules.direct_metadata_application_enhanced_fixed import apply_metadata_direct
 from modules.session_state_manager import initialize_session_state, get_session_state
 
 # Import automated workflow modules
@@ -201,7 +201,7 @@ def display_manual_workflow_interface(client):
     
     # Tab 5: Apply Metadata
     with tabs[4]:
-        apply_metadata_to_files(client)
+        apply_metadata_direct(client)
 
 if __name__ == "__main__":
     main()
