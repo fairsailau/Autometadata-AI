@@ -368,29 +368,157 @@ class ConfigurationInterface:
             st.write("Add a new folder to monitor:")
             
             if self.client:
-                # Implement folder browser or folder ID input
-                folder_id = st.text_input("Folder ID")
-                folder_name = st.text_input("Folder Name (optional)")
+                # Enhanced folder selection with folder browser
+                use_browser = st.checkbox("Use folder browser", value=True, 
+                                         help="Browse your Box folders instead of entering folder ID manually")
                 
-                if st.button("Add Folder"):
-                    if folder_id:
-                        if not folder_name:
-                            # Try to get folder name from Box
-                            try:
-                                folder = self.client.folder(folder_id).get()
-                                folder_name = folder.name
-                            except Exception as e:
-                                st.error(f"Error retrieving folder name: {str(e)}")
-                                folder_name = f"Folder {folder_id}"
+                if use_browser:
+                    # Implement folder browser
+                    st.write("#### Browse Box Folders")
+                    
+                    # Initialize folder navigation state if not exists
+                    if "folder_nav" not in st.session_state:
+                        st.session_state.folder_nav = {
+                            "current_folder_id": "0",  # Root folder
+                            "current_folder_name": "All Files",
+                            "folder_path": [{"id": "0", "name": "All Files"}],
+                            "selected_folder_id": None,
+                            "selected_folder_name": None
+                        }
+                    
+                    # Display current path
+                    path_html = " / ".join([f"<a href='#' id='{folder['id']}'>{folder['name']}</a>" 
+                                          for folder in st.session_state.folder_nav["folder_path"]])
+                    st.markdown(f"**Path:** {path_html}", unsafe_allow_html=True)
+                    
+                    # Get current folder contents
+                    try:
+                        current_folder_id = st.session_state.folder_nav["current_folder_id"]
+                        folder_items = self.client.folder(folder_id=current_folder_id).get_items(limit=100)
                         
-                        self.config.add_monitored_folder(folder_id, folder_name)
-                        st.success(f"Added folder: {folder_name}")
-                        st.rerun()
-                    else:
-                        st.error("Please enter a folder ID")
+                        # Filter to only show folders
+                        folders = [item for item in folder_items if item.type == "folder"]
+                        
+                        if folders:
+                            # Display folders
+                            st.write("**Select a folder:**")
+                            
+                            # Create a grid layout for folders
+                            cols = st.columns(3)
+                            for i, folder in enumerate(folders):
+                                col_idx = i % 3
+                                with cols[col_idx]:
+                                    if st.button(f"📁 {folder.name}", key=f"folder_{folder.id}"):
+                                        # Navigate to this folder
+                                        st.session_state.folder_nav["current_folder_id"] = folder.id
+                                        st.session_state.folder_nav["current_folder_name"] = folder.name
+                                        st.session_state.folder_nav["folder_path"].append({
+                                            "id": folder.id,
+                                            "name": folder.name
+                                        })
+                                        st.rerun()
+                        else:
+                            st.info("No subfolders found in this location.")
+                        
+                        # Option to go back
+                        if len(st.session_state.folder_nav["folder_path"]) > 1:
+                            if st.button("⬅️ Go Back", key="go_back_folder"):
+                                # Remove current folder from path
+                                st.session_state.folder_nav["folder_path"].pop()
+                                # Set current folder to the last one in the path
+                                last_folder = st.session_state.folder_nav["folder_path"][-1]
+                                st.session_state.folder_nav["current_folder_id"] = last_folder["id"]
+                                st.session_state.folder_nav["current_folder_name"] = last_folder["name"]
+                                st.rerun()
+                        
+                        # Select current folder button
+                        current_folder_name = st.session_state.folder_nav["current_folder_name"]
+                        current_folder_id = st.session_state.folder_nav["current_folder_id"]
+                        
+                        if st.button(f"Select Current Folder: {current_folder_name}", key="select_current_folder"):
+                            # Add this folder to monitored folders
+                            self.config.add_monitored_folder(current_folder_id, current_folder_name)
+                            st.success(f"Added folder: {current_folder_name}")
+                            
+                            # Reset folder navigation
+                            st.session_state.folder_nav = {
+                                "current_folder_id": "0",
+                                "current_folder_name": "All Files",
+                                "folder_path": [{"id": "0", "name": "All Files"}],
+                                "selected_folder_id": None,
+                                "selected_folder_name": None
+                            }
+                            st.rerun()
+                    
+                    except Exception as e:
+                        st.error(f"Error browsing folders: {str(e)}")
+                        logger.error(f"Error browsing folders: {str(e)}", exc_info=True)
+                
+                else:
+                    # Manual folder ID input
+                    folder_id = st.text_input("Folder ID")
+                    folder_name = st.text_input("Folder Name (optional)")
+                    
+                    if st.button("Add Folder"):
+                        if folder_id:
+                            if not folder_name:
+                                # Try to get folder name from Box
+                                try:
+                                    folder = self.client.folder(folder_id).get()
+                                    folder_name = folder.name
+                                except Exception as e:
+                                    st.error(f"Error retrieving folder name: {str(e)}")
+                                    folder_name = f"Folder {folder_id}"
+                            
+                            self.config.add_monitored_folder(folder_id, folder_name)
+                            st.success(f"Added folder: {folder_name}")
+                            st.rerun()
+                        else:
+                            st.error("Please enter a folder ID")
             else:
                 st.warning("Please authenticate with Box to add folders")
+            
+            # Event stream integration section
+            st.write("---")
+            st.subheader("Event Stream Integration")
+            st.write("Configure Box event stream to automatically process new files.")
+            
+            # Webhook setup instructions
+            with st.expander("Webhook Setup Instructions", expanded=False):
+                st.write("""
+                ### Setting up Box Webhooks
                 
+                1. Go to the [Box Developer Console](https://app.box.com/developers/console)
+                2. Create a new app or select your existing app
+                3. Navigate to the 'Webhooks' section
+                4. Create a new webhook with the following settings:
+                   - Target URL: Use the webhook URL shown below
+                   - Triggers: Select 'FILE.UPLOADED' and 'FILE.COPIED'
+                   - Address: Select the folders you want to monitor
+                5. Save the webhook configuration
+                """)
+            
+            # Get webhook URL
+            webhook_port = self.config.get_webhook_port()
+            base_url = os.environ.get('WEBHOOK_BASE_URL', 'http://localhost')
+            webhook_url = f"{base_url}:{webhook_port}/webhook"
+            
+            st.code(webhook_url, language="text")
+            st.info("Use this URL when configuring webhooks in the Box Developer Console.")
+            
+            # Test webhook connection
+            if st.button("Test Webhook Connection"):
+                try:
+                    # Simulate a webhook test
+                    import requests
+                    response = requests.get(webhook_url, timeout=5)
+                    if response.status_code == 200:
+                        st.success("Webhook endpoint is accessible!")
+                    else:
+                        st.warning(f"Webhook endpoint returned status code: {response.status_code}")
+                except Exception as e:
+                    st.error(f"Error testing webhook connection: {str(e)}")
+            
             logger.info("Folder selection interface rendered successfully")
         except Exception as e:
             logger.error(f"Error rendering folder selection: {str(e)}", exc_info=True)
@@ -403,19 +531,23 @@ class ConfigurationInterface:
             st.write("Map document categories to metadata templates.")
             
             # Get metadata templates
-            if "metadata_templates" not in st.session_state or not st.session_state.metadata_templates:
-                if self.client:
-                    try:
-                        from modules.metadata_template_retrieval import get_metadata_templates
-                        templates = get_metadata_templates(self.client)
+            templates = []
+            if self.client:
+                try:
+                    from modules.metadata_template_retrieval import get_metadata_templates
+                    templates = get_metadata_templates(self.client)
+                    
+                    # Store templates in session state for reuse
+                    if "metadata_templates" not in st.session_state or not st.session_state.metadata_templates:
                         st.session_state.metadata_templates = templates
-                    except Exception as e:
-                        st.error(f"Error retrieving metadata templates: {str(e)}")
-                        templates = []
-                else:
-                    templates = []
+                    
+                    if not templates:
+                        st.warning("No metadata templates found. Please create templates in Box.")
+                except Exception as e:
+                    st.error(f"Error retrieving metadata templates: {str(e)}")
+                    logger.error(f"Error retrieving metadata templates: {str(e)}", exc_info=True)
             else:
-                templates = st.session_state.metadata_templates
+                st.warning("Please authenticate with Box to retrieve metadata templates.")
             
             # Get document categories
             # In a real implementation, this would come from the document categorization module
@@ -505,12 +637,22 @@ class ConfigurationInterface:
             # Get current AI model
             current_model = self.config.get_ai_model()
             
-            # Define available models
+            # Define available models based on Box AI documentation
+            # Source: https://developer.box.com/guides/box-ai/ai-models/
             models = [
                 {"id": "default", "name": "Default (Box AI)"},
                 {"id": "azure__openai__gpt_4o", "name": "GPT-4o (Azure OpenAI)"},
                 {"id": "azure__openai__gpt_4o_mini", "name": "GPT-4o Mini (Azure OpenAI)"},
-                {"id": "azure__openai__gpt_35_turbo", "name": "GPT-3.5 Turbo (Azure OpenAI)"}
+                {"id": "azure__openai__gpt_35_turbo", "name": "GPT-3.5 Turbo (Azure OpenAI)"},
+                {"id": "google__gemini_2_0_flash_001", "name": "Gemini 2.0 Flash (Google)"},
+                {"id": "google__gemini_2_0_flash_lite_preview", "name": "Gemini 2.0 Flash Lite (Google)"},
+                {"id": "google__gemini_1_5_flash_001", "name": "Gemini 1.5 Flash (Google)"},
+                {"id": "google__gemini_1_5_pro_001", "name": "Gemini 1.5 Pro (Google)"},
+                {"id": "aws__claude_3_haiku", "name": "Claude 3 Haiku (AWS)"},
+                {"id": "aws__claude_3_sonnet", "name": "Claude 3 Sonnet (AWS)"},
+                {"id": "aws__claude_3_5_sonnet", "name": "Claude 3.5 Sonnet (AWS)"},
+                {"id": "aws__claude_3_7_sonnet", "name": "Claude 3.7 Sonnet (AWS)"},
+                {"id": "aws__titan_text_lite", "name": "Titan Text Lite (AWS)"}
             ]
             
             # Model selection
@@ -526,11 +668,36 @@ class ConfigurationInterface:
                 "default": "Uses Box's built-in AI capabilities for metadata extraction.",
                 "azure__openai__gpt_4o": "Most capable model for complex metadata extraction tasks. Higher cost but better accuracy.",
                 "azure__openai__gpt_4o_mini": "Balanced model with good performance and reasonable cost.",
-                "azure__openai__gpt_35_turbo": "Fastest and most cost-effective model. Good for simple metadata extraction tasks."
+                "azure__openai__gpt_35_turbo": "Fast and cost-effective model. Good for simple metadata extraction tasks.",
+                "google__gemini_2_0_flash_001": "Google's fast and efficient model for quick metadata extraction.",
+                "google__gemini_2_0_flash_lite_preview": "Lightweight version of Gemini 2.0 Flash, optimized for speed.",
+                "google__gemini_1_5_flash_001": "Efficient model for routine metadata extraction tasks.",
+                "google__gemini_1_5_pro_001": "More powerful Google model for complex document understanding.",
+                "aws__claude_3_haiku": "Fast and efficient Claude model for routine metadata extraction.",
+                "aws__claude_3_sonnet": "Balanced Claude model with good performance for most tasks.",
+                "aws__claude_3_5_sonnet": "Enhanced Claude model with improved accuracy.",
+                "aws__claude_3_7_sonnet": "Latest Claude model with advanced capabilities.",
+                "aws__titan_text_lite": "Amazon's lightweight model for basic metadata extraction."
             }
             
             if selected_model in model_descriptions:
                 st.info(model_descriptions[selected_model])
+            
+            # Model comparison
+            with st.expander("Model Comparison", expanded=False):
+                st.write("""
+                ### Model Comparison
+                
+                | Model | Speed | Cost | Accuracy | Best For |
+                | ----- | ----- | ---- | -------- | -------- |
+                | GPT-4o | Medium | High | Highest | Complex documents, legal contracts |
+                | GPT-4o Mini | Fast | Medium | High | Most business documents |
+                | GPT-3.5 Turbo | Very Fast | Low | Good | Simple documents, high volume |
+                | Gemini 2.0 Flash | Fast | Medium | High | General purpose extraction |
+                | Claude 3 Sonnet | Medium | Medium | High | Detailed analysis, compliance |
+                | Claude 3 Haiku | Fast | Low | Good | Quick extraction, high volume |
+                | Titan Text Lite | Very Fast | Low | Good | Basic metadata, high volume |
+                """)
             
             # Save button
             if st.button("Save Model Selection"):

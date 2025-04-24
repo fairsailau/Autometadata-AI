@@ -22,7 +22,7 @@ st.set_page_config(
 # Import modules
 from modules.authentication import authenticate
 from modules.file_browser import file_browser
-from modules.document_categorization import categorize_document
+from modules.document_categorization import document_categorization
 from modules.metadata_template_retrieval import get_metadata_templates
 from modules.metadata_config import metadata_config
 from modules.processing import process_files
@@ -131,7 +131,7 @@ def main():
         
         # Document Categorization page
         elif current_page == "Document Categorization":
-            categorize_document(client)
+            document_categorization()
         
         # Metadata Configuration page
         elif current_page == "Metadata Configuration":
