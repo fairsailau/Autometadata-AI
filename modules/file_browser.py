@@ -165,3 +165,6 @@ def file_browser():
         if st.button("Continue to Metadata Configuration", use_container_width=True):
             st.session_state.current_page = "Metadata Configuration"
             st.rerun()
+
+# Add an alias for backward compatibility
+display_file_browser = file_browser

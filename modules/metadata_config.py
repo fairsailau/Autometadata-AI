@@ -321,3 +321,6 @@ def metadata_config():
     if st.button("Continue to Process Files", key="continue_to_process_button", use_container_width=True):
         st.session_state.current_page = "Process Files"
         st.rerun()
+
+# Add an alias for backward compatibility
+display_metadata_config = metadata_config
