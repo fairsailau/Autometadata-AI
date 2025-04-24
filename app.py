@@ -11,6 +11,14 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Set page config - MOVED HERE FROM main() function
+st.set_page_config(
+    page_title="Box Metadata Extraction",
+    page_icon="📄",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 # Import modules
 from modules.authentication import authenticate
 from modules.file_browser import file_browser
@@ -37,171 +45,109 @@ from modules.integration import (
 
 def main():
     """Main application function."""
-    # Set page config
-    st.set_page_config(
-        page_title="Box Metadata Extraction",
-        page_icon="📄",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
     # Initialize session state
     initialize_session_state()
     
-    # Display header
-    st.title("Box Metadata Extraction")
+    # Get session state
+    session_state = get_session_state()
     
-    # Authenticate
-    client = authenticate()
-    
-    if client:
-        # Get session state
-        session_state = get_session_state()
-        
-        # Display sidebar
-        display_sidebar(client)
-        
-        # Render workflow selection
-        render_workflow_selection(client)
-        
-        # Get workflow configuration
-        config = get_automated_workflow_config()
-        
-        # Check if automated workflow is enabled
-        if config.is_enabled():
-            # Display automated workflow interface
-            display_automated_workflow_interface(client)
-        else:
-            # Display manual workflow interface
-            display_manual_workflow_interface(client)
-    else:
-        st.error("Authentication failed. Please check your credentials.")
-
-def display_sidebar(client):
-    """
-    Display sidebar with application information and controls.
-    
-    Args:
-        client: Box client instance
-    """
+    # Display sidebar
     with st.sidebar:
-        st.header("Navigation")
+        # Display application title
+        st.title("Box Metadata Extraction")
+        st.write("Extract and apply metadata to Box files using AI")
+        st.write("---")
         
-        # Get workflow configuration
-        config = get_automated_workflow_config()
+        # Display workflow selection
+        workflow_mode = render_workflow_selection()
         
-        # Create navigation options based on workflow mode
-        if config.is_enabled():
-            # Automated workflow navigation
-            page = st.radio(
-                "Select Page",
-                ["Dashboard", "Configuration", "Manual Processing"],
-                index=0
-            )
+        # Display authentication section
+        client = authenticate()
+        
+        # Display automated workflow configuration if selected
+        if workflow_mode == "automated":
+            render_configuration_interface(client)
             
-            # Store selected page in session state
-            st.session_state.selected_page = page
+            # Display monitoring dashboard if authenticated
+            if client and st.session_state.authenticated:
+                render_monitoring_dashboard(client)
+        
+        # Display manual workflow navigation if selected
+        elif workflow_mode == "manual":
+            # Navigation
+            st.write("### Navigation")
             
-            # Display event stream status
-            if is_event_stream_running():
-                st.success("Event Stream: Running")
+            # Define pages
+            pages = {
+                "Home": "🏠",
+                "File Browser": "📁",
+                "Document Categorization": "🏷️",
+                "Metadata Configuration": "⚙️",
+                "Process Files": "🔄",
+                "View Results": "👁️",
+                "Apply Metadata": "✅"
+            }
+            
+            # Create navigation buttons
+            for page, icon in pages.items():
+                if st.button(f"{icon} {page}", key=f"nav_{page}", use_container_width=True):
+                    st.session_state.current_page = page
+                    st.rerun()
+        
+        # Display footer
+        st.write("---")
+        st.write("© 2024 Box Metadata Extraction")
+        st.write("Version 2.0.0")
+    
+    # Display main content based on current page
+    if workflow_mode == "manual":
+        # Get current page
+        current_page = st.session_state.current_page
+        
+        # Display page content
+        st.header(f"{current_page}")
+        
+        # Home page
+        if current_page == "Home":
+            st.write("Welcome to Box Metadata Extraction!")
+            st.write("This application helps you extract metadata from Box files using AI and apply it back to the files.")
+            st.write("To get started, authenticate with Box using the sidebar and then navigate to the File Browser.")
+            
+            # Display user journey guide
+            from modules.user_journey_guide import user_journey_guide, display_step_help
+            user_journey_guide(current_page)
+            display_step_help(current_page)
+            
+            # Display status
+            if client and st.session_state.authenticated:
+                st.success("✅ Authentication successful! You can now browse your Box files.")
+                st.write("Click on 'File Browser' in the sidebar to continue.")
             else:
-                st.error("Event Stream: Stopped")
-                
-                # Start button
-                if st.button("Start Event Stream"):
-                    if initialize_automated_workflow(client):
-                        st.success("Event stream started")
-                        st.rerun()
-                    else:
-                        st.error("Failed to start event stream")
-        else:
-            # Manual workflow navigation
-            page = st.radio(
-                "Select Page",
-                ["Manual Processing", "Configuration"],
-                index=0
-            )
-            
-            # Store selected page in session state
-            st.session_state.selected_page = page
-            
-            # Stop event stream if running
-            if is_event_stream_running():
-                if st.button("Stop Event Stream"):
-                    if shutdown_automated_workflow():
-                        st.success("Event stream stopped")
-                        st.rerun()
-                    else:
-                        st.error("Failed to stop event stream")
+                st.warning("⚠️ Please authenticate with Box to continue.")
         
-        # Display application information
-        st.header("About")
-        st.info(
-            "Box Metadata Extraction Application\n\n"
-            "This application extracts metadata from Box files using Box AI "
-            "and applies it to files."
-        )
+        # File Browser page
+        elif current_page == "File Browser":
+            file_browser()
         
-        # Display version information
-        st.text(f"Version: 2.0.0")
-        st.text(f"Last Updated: {datetime.now().strftime('%Y-%m-%d')}")
-
-def display_automated_workflow_interface(client):
-    """
-    Display automated workflow interface.
-    
-    Args:
-        client: Box client instance
-    """
-    # Get selected page from session state
-    selected_page = st.session_state.get("selected_page", "Dashboard")
-    
-    if selected_page == "Dashboard":
-        # Display monitoring dashboard
-        render_monitoring_dashboard(client)
-    elif selected_page == "Configuration":
-        # Display configuration interface
-        render_configuration_interface(client)
-    elif selected_page == "Manual Processing":
-        # Display manual workflow interface
-        display_manual_workflow_interface(client)
-
-def display_manual_workflow_interface(client):
-    """
-    Display manual workflow interface.
-    
-    Args:
-        client: Box client instance
-    """
-    # Create tabs for workflow steps
-    tabs = st.tabs([
-        "1. Select Files",
-        "2. Configure Metadata",
-        "3. Process Files",
-        "4. Review Results",
-        "5. Apply Metadata"
-    ])
-    
-    # Tab 1: Select Files
-    with tabs[0]:
-        display_file_browser(client)
-    
-    # Tab 2: Configure Metadata
-    with tabs[1]:
-        display_metadata_config(client)
-    
-    # Tab 3: Process Files
-    with tabs[2]:
-        process_files(client)
-    
-    # Tab 4: Review Results
-    with tabs[3]:
-        display_results(client)
-    
-    # Tab 5: Apply Metadata
-    with tabs[4]:
-        apply_metadata_direct(client)
+        # Document Categorization page
+        elif current_page == "Document Categorization":
+            categorize_document(client)
+        
+        # Metadata Configuration page
+        elif current_page == "Metadata Configuration":
+            metadata_config()
+        
+        # Process Files page
+        elif current_page == "Process Files":
+            process_files()
+        
+        # View Results page
+        elif current_page == "View Results":
+            view_results()
+        
+        # Apply Metadata page
+        elif current_page == "Apply Metadata":
+            apply_metadata_direct(client)
 
 if __name__ == "__main__":
     main()
