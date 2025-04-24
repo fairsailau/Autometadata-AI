@@ -103,6 +103,15 @@ def get_safe_session_state(key, default_value=None):
         logger.warning(f"Session state key '{key}' not found, using default value")
         return default_value
 
+def get_session_state():
+    """
+    Get the entire session state object.
+    
+    Returns:
+        The complete session state object
+    """
+    return st.session_state
+
 def set_safe_session_state(key, value):
     """
     Safely set a value in session state.
@@ -164,6 +173,5 @@ def debug_session_state():
     logger.info(f"Session state debug info: {debug_info}")
     return debug_info
 
-# Add aliases for backward compatibility
+# Add an alias for backward compatibility
 initialize_session_state = initialize_app_session_state
-get_session_state = get_safe_session_state
