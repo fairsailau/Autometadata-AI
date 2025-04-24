@@ -18,7 +18,7 @@ from modules.document_categorization import categorize_document
 from modules.metadata_template_retrieval import get_metadata_templates
 from modules.metadata_config import metadata_config
 from modules.processing import process_files
-from modules.results_viewer import results_viewer
+from modules.results_viewer import view_results
 from modules.direct_metadata_application_enhanced_fixed import apply_metadata_to_files
 from modules.session_state_manager import initialize_session_state, get_session_state
 
