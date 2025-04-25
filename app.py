@@ -8,6 +8,14 @@ import logging
 import streamlit as st
 from typing import Dict, Any, List, Optional, Tuple, Union
 
+# Set page config - MUST be the first Streamlit command
+st.set_page_config(
+    page_title="Box Metadata Extraction",
+    page_icon="📦",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,14 +30,6 @@ from modules.webhook_server import start_webhook_server, stop_webhook_server, is
 
 # Initialize session state
 initialize_session_state()
-
-# Set page config
-st.set_page_config(
-    page_title="Box Metadata Extraction",
-    page_icon="📦",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 def render_header():
     """Render the application header."""
