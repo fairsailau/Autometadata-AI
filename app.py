@@ -23,7 +23,7 @@ st.set_page_config(
 from modules.authentication import authenticate
 from modules.file_browser import file_browser
 from modules.document_categorization import document_categorization
-from modules.metadata_template_retrieval import get_metadata_templates
+from modules.metadata_template_retrieval import get_metadata_templates, initialize_template_state
 from modules.metadata_config import metadata_config
 from modules.processing import process_files
 from modules.results_viewer import view_results
@@ -70,6 +70,9 @@ def main():
     # Initialize session state
     initialize_session_state()
     
+    # Initialize template state
+    initialize_template_state()
+    
     # Get session state
     session_state = get_session_state()
     
@@ -100,11 +103,25 @@ def main():
             st.session_state.client = client
             logger.info("Client stored in session state")
             
+            # Load metadata templates if authenticated
+            if "metadata_templates" not in st.session_state or not st.session_state.metadata_templates:
+                logger.info("Loading metadata templates after authentication")
+                templates = get_metadata_templates(client)
+                logger.info(f"Loaded {len(templates)} metadata templates")
+            
             # This is a newly authenticated session, trigger a rerun to ensure proper rendering
             if "just_authenticated" not in st.session_state:
                 logger.info("Setting just_authenticated flag and triggering rerun")
                 st.session_state.just_authenticated = True
                 st.rerun()
+        
+        # Add refresh templates button if authenticated
+        if client and st.session_state.authenticated:
+            if st.button("Refresh Metadata Templates", key="refresh_templates_button"):
+                logger.info("Refreshing metadata templates")
+                templates = get_metadata_templates(client, force_refresh=True)
+                logger.info(f"Refreshed {len(templates)} metadata templates")
+                st.success(f"Refreshed {len(templates)} metadata templates")
         
         # Display automated workflow configuration if selected and authenticated
         if workflow_mode == "automated" and client and st.session_state.authenticated:

@@ -22,12 +22,12 @@ def get_metadata_templates(client, force_refresh=False):
         dict: Metadata templates
     """
     # Check if templates are already cached and not forcing refresh
-    if not force_refresh and hasattr(st.session_state, "metadata_templates") and st.session_state.metadata_templates:
+    if not force_refresh and "metadata_templates" in st.session_state and st.session_state.metadata_templates:
         logger.info(f"Using cached metadata templates: {len(st.session_state.metadata_templates)} templates")
         return st.session_state.metadata_templates
     
     # If client is not provided or not authenticated, return empty dict
-    if not client or not hasattr(st.session_state, "authenticated") or not st.session_state.authenticated:
+    if not client or "authenticated" not in st.session_state or not st.session_state.authenticated:
         logger.warning("Client not provided or not authenticated")
         return {}
     
@@ -40,7 +40,13 @@ def get_metadata_templates(client, force_refresh=False):
             access_token = client.auth.access_token
         
         if not access_token:
-            raise ValueError("Could not retrieve access token from client")
+            logger.warning("Could not retrieve access token from client, trying direct API access")
+            # Try to get access token directly from session state
+            if "auth_credentials" in st.session_state and "access_token" in st.session_state.auth_credentials:
+                access_token = st.session_state.auth_credentials["access_token"]
+            
+            if not access_token:
+                raise ValueError("Could not retrieve access token from client or session state")
         
         logger.info("Retrieved access token, fetching metadata templates")
         
@@ -122,7 +128,7 @@ def get_metadata_templates(client, force_refresh=False):
     except Exception as e:
         logger.error(f"Error retrieving metadata templates: {str(e)}", exc_info=True)
         # Don't clear existing templates on error
-        if not hasattr(st.session_state, "metadata_templates"):
+        if "metadata_templates" not in st.session_state:
             st.session_state.metadata_templates = {}
         return st.session_state.metadata_templates
 
@@ -236,17 +242,17 @@ def initialize_template_state():
     Initialize template-related session state variables
     """
     # Template cache
-    if not hasattr(st.session_state, "metadata_templates"):
+    if "metadata_templates" not in st.session_state:
         st.session_state.metadata_templates = {}
         logger.info("Initialized metadata_templates in session state")
     
     # Template cache timestamp
-    if not hasattr(st.session_state, "template_cache_timestamp"):
+    if "template_cache_timestamp" not in st.session_state:
         st.session_state.template_cache_timestamp = None
         logger.info("Initialized template_cache_timestamp in session state")
     
     # Document type to template mapping
-    if not hasattr(st.session_state, "document_type_to_template"):
+    if "document_type_to_template" not in st.session_state:
         st.session_state.document_type_to_template = {
             "Sales Contract": None,
             "Invoices": None,
@@ -271,7 +277,7 @@ def get_template_by_id(template_id):
     if not template_id:
         return None
     
-    if not hasattr(st.session_state, "metadata_templates") or not st.session_state.metadata_templates:
+    if "metadata_templates" not in st.session_state or not st.session_state.metadata_templates:
         return None
     
     return st.session_state.metadata_templates.get(template_id)
@@ -289,7 +295,7 @@ def get_template_by_document_type(document_type):
     if not document_type:
         return None
     
-    if not hasattr(st.session_state, "document_type_to_template"):
+    if "document_type_to_template" not in st.session_state:
         return None
     
     template_id = st.session_state.document_type_to_template.get(document_type)
@@ -306,7 +312,7 @@ def map_document_type_to_template(document_type, template_id):
         document_type: Document type
         template_id: Template ID
     """
-    if not hasattr(st.session_state, "document_type_to_template"):
+    if "document_type_to_template" not in st.session_state:
         st.session_state.document_type_to_template = {}
     
     st.session_state.document_type_to_template[document_type] = template_id

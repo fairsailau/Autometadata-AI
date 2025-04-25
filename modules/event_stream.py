@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple, Union
 from flask import Flask, request, jsonify
 import requests
+import streamlit as st
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -427,10 +428,11 @@ def test_webhook_connection(url=None):
         
         # Get webhook URL
         if url is None:
-            # Use ngrok URL from configuration if available
-            ngrok_url = config.config.get("ngrok_url")
-            if ngrok_url:
-                url = f"{ngrok_url}/webhook"
+            # Use streamlit server URL if available
+            if "server" in st.config and "baseUrlPath" in st.config.server:
+                base_url = st.config.server.baseUrlPath
+                port = config.get_webhook_port()
+                url = f"{base_url}:{port}/webhook"
             else:
                 # Use localhost URL as fallback
                 port = config.get_webhook_port()
@@ -463,9 +465,9 @@ def test_webhook_connection(url=None):
         }
 
 
-def setup_ngrok_webhook(port=None):
+def setup_streamlit_webhook(port=None):
     """
-    Set up ngrok webhook.
+    Set up Streamlit webhook using Streamlit's built-in server.
     
     Args:
         port: Port to expose
@@ -482,70 +484,352 @@ def setup_ngrok_webhook(port=None):
         if port is None:
             port = config.get_webhook_port()
         
-        # Check if ngrok is installed
-        import subprocess
-        try:
-            subprocess.run(["ngrok", "--version"], check=True, capture_output=True)
-        except:
-            return {
-                "status": "error",
-                "message": "ngrok is not installed or not in PATH"
-            }
+        # Check if Streamlit is running in cloud environment
+        is_cloud = os.environ.get('IS_STREAMLIT_CLOUD', 'false').lower() == 'true'
         
-        # Start ngrok
-        process = subprocess.Popen(
-            ["ngrok", "http", str(port)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        
-        # Wait for ngrok to start
-        time.sleep(2)
-        
-        # Check if ngrok is running
-        try:
-            # Get ngrok API info
-            response = requests.get("http://localhost:4040/api/tunnels")
-            data = response.json()
+        if is_cloud:
+            # In Streamlit Cloud, we can use the app URL directly
+            app_url = os.environ.get('STREAMLIT_APP_URL', '')
+            if not app_url:
+                # Try to get from Streamlit config
+                if "server" in st.config and "baseUrlPath" in st.config.server:
+                    app_url = st.config.server.baseUrlPath
+                
+                if not app_url:
+                    return {
+                        "status": "error",
+                        "message": "Could not determine Streamlit app URL"
+                    }
             
-            # Get public URL
-            tunnels = data.get("tunnels", [])
-            if not tunnels:
-                return {
-                    "status": "error",
-                    "message": "No ngrok tunnels found"
-                }
+            # Construct webhook URL
+            webhook_url = f"{app_url}/webhook"
             
-            # Get HTTPS tunnel
-            https_tunnel = next((t for t in tunnels if t["proto"] == "https"), None)
-            if not https_tunnel:
-                return {
-                    "status": "error",
-                    "message": "No HTTPS tunnel found"
-                }
-            
-            # Get public URL
-            public_url = https_tunnel["public_url"]
-            
-            # Save ngrok URL to configuration
-            config.config["ngrok_url"] = public_url
+            # Save webhook URL to configuration
+            config.config["webhook_url"] = webhook_url
             config._save_config()
             
             return {
                 "status": "success",
-                "message": "ngrok tunnel created successfully",
-                "url": public_url,
-                "webhook_url": f"{public_url}/webhook"
+                "message": "Streamlit webhook URL configured successfully",
+                "url": webhook_url
             }
-        
-        except Exception as e:
+        else:
+            # For local development, we need to use a tunnel service
+            # Inform the user they need to use a tunnel service
             return {
-                "status": "error",
-                "message": f"Error getting ngrok URL: {str(e)}"
+                "status": "warning",
+                "message": "For local development, you need to use a tunnel service like ngrok or localtunnel",
+                "port": port,
+                "instructions": [
+                    "1. Install a tunnel service like ngrok or localtunnel",
+                    "2. Run the tunnel service to expose your local port",
+                    "3. Configure the webhook URL in Box Developer Console"
+                ]
             }
     
     except Exception as e:
         return {
             "status": "error",
-            "message": f"Error setting up ngrok webhook: {str(e)}"
+            "message": f"Error setting up Streamlit webhook: {str(e)}"
         }
+
+
+def get_webhook_url():
+    """
+    Get the webhook URL.
+    
+    Returns:
+        str: Webhook URL or None if not available
+    """
+    try:
+        # Get configuration
+        from modules.configuration_interface import get_automated_workflow_config
+        config = get_automated_workflow_config()
+        
+        # Check if webhook URL is configured
+        webhook_url = config.config.get("webhook_url")
+        if webhook_url:
+            return webhook_url
+        
+        # Check if we're running in Streamlit Cloud
+        is_cloud = os.environ.get('IS_STREAMLIT_CLOUD', 'false').lower() == 'true'
+        
+        if is_cloud:
+            # In Streamlit Cloud, we can use the app URL directly
+            app_url = os.environ.get('STREAMLIT_APP_URL', '')
+            if not app_url:
+                # Try to get from Streamlit config
+                if "server" in st.config and "baseUrlPath" in st.config.server:
+                    app_url = st.config.server.baseUrlPath
+                
+                if not app_url:
+                    return None
+            
+            # Construct webhook URL
+            webhook_url = f"{app_url}/webhook"
+            
+            # Save webhook URL to configuration
+            config.config["webhook_url"] = webhook_url
+            config._save_config()
+            
+            return webhook_url
+        
+        # For local development, check if ngrok URL is configured
+        ngrok_url = config.config.get("ngrok_url")
+        if ngrok_url:
+            return f"{ngrok_url}/webhook"
+        
+        # No webhook URL available
+        return None
+    
+    except Exception as e:
+        logger.error(f"Error getting webhook URL: {str(e)}", exc_info=True)
+        return None
+
+
+def start_event_stream(client=None, port=None):
+    """
+    Start the event stream.
+    
+    Args:
+        client: Box client instance
+        port: Port to listen on
+        
+    Returns:
+        bool: True if event stream was started, False otherwise
+    """
+    return start_webhook_server(port=port, client=client)
+
+
+def stop_event_stream():
+    """
+    Stop the event stream.
+    
+    Returns:
+        bool: True if event stream was stopped, False otherwise
+    """
+    return stop_webhook_server()
+
+
+def is_event_stream_running():
+    """
+    Check if event stream is running.
+    
+    Returns:
+        bool: True if event stream is running, False otherwise
+    """
+    return is_webhook_server_running()
+
+
+# Event processor class
+class EventProcessor:
+    """
+    Event processor for Box events.
+    """
+    
+    def __init__(self, client=None):
+        """
+        Initialize the event processor.
+        
+        Args:
+            client: Box client instance
+        """
+        self.client = client
+        self.processors = {}
+        logger.info("EventProcessor initialized")
+    
+    def register_processor(self, event_type, processor):
+        """
+        Register a processor for an event type.
+        
+        Args:
+            event_type: Event type
+            processor: Processor function
+        """
+        self.processors[event_type] = processor
+        logger.info(f"Registered processor for event type: {event_type}")
+    
+    def process_event(self, event):
+        """
+        Process an event.
+        
+        Args:
+            event: Event data
+            
+        Returns:
+            bool: True if event was processed, False otherwise
+        """
+        try:
+            # Get event type
+            event_type = event.get('trigger')
+            
+            if not event_type:
+                logger.warning("Event has no trigger field")
+                return False
+            
+            # Check if we have a processor for this event type
+            if event_type not in self.processors:
+                logger.warning(f"No processor registered for event type: {event_type}")
+                return False
+            
+            # Process event
+            logger.info(f"Processing event of type: {event_type}")
+            self.processors[event_type](event, self.client)
+            
+            return True
+        
+        except Exception as e:
+            logger.error(f"Error processing event: {str(e)}", exc_info=True)
+            return False
+
+
+# Global event processor instance
+_event_processor = None
+
+def get_event_processor(client=None):
+    """
+    Get the global event processor instance.
+    
+    Args:
+        client: Box client instance
+        
+    Returns:
+        EventProcessor: Global event processor instance
+    """
+    global _event_processor
+    
+    if _event_processor is None:
+        _event_processor = EventProcessor(client)
+    elif client is not None:
+        _event_processor.client = client
+    
+    return _event_processor
+
+
+# Global webhook manager instance
+_webhook_manager = None
+
+class WebhookManager:
+    """
+    Webhook manager for Box webhooks.
+    """
+    
+    def __init__(self, client=None):
+        """
+        Initialize the webhook manager.
+        
+        Args:
+            client: Box client instance
+        """
+        self.client = client
+        logger.info("WebhookManager initialized")
+    
+    def register_webhook(self, folder_id, webhook_url):
+        """
+        Register a webhook for a folder.
+        
+        Args:
+            folder_id: Folder ID
+            webhook_url: Webhook URL
+            
+        Returns:
+            str: Webhook ID or None if registration failed
+        """
+        try:
+            # Check if client is available
+            if not self.client:
+                logger.warning("No client available")
+                return None
+            
+            # Check if folder exists
+            try:
+                folder = self.client.folder(folder_id=folder_id).get()
+            except Exception as e:
+                logger.error(f"Error getting folder {folder_id}: {str(e)}")
+                return None
+            
+            # Check if webhook already exists for this folder
+            webhooks = self.client.get_webhooks()
+            for webhook in webhooks:
+                if webhook.target.id == folder_id:
+                    logger.info(f"Webhook already exists for folder {folder_id}: {webhook.id}")
+                    return webhook.id
+            
+            # Create webhook
+            triggers = ['FILE.UPLOADED', 'FILE.COPIED', 'FILE.MOVED']
+            webhook = self.client.create_webhook(folder, webhook_url, triggers)
+            
+            logger.info(f"Registered webhook for folder {folder_id}: {webhook.id}")
+            return webhook.id
+        
+        except Exception as e:
+            logger.error(f"Error registering webhook: {str(e)}", exc_info=True)
+            return None
+    
+    def unregister_webhook(self, webhook_id):
+        """
+        Unregister a webhook.
+        
+        Args:
+            webhook_id: Webhook ID
+            
+        Returns:
+            bool: True if webhook was unregistered, False otherwise
+        """
+        try:
+            # Check if client is available
+            if not self.client:
+                logger.warning("No client available")
+                return False
+            
+            # Delete webhook
+            self.client.webhook(webhook_id).delete()
+            
+            logger.info(f"Unregistered webhook: {webhook_id}")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Error unregistering webhook: {str(e)}", exc_info=True)
+            return False
+    
+    def get_webhooks(self):
+        """
+        Get all webhooks.
+        
+        Returns:
+            list: List of webhooks
+        """
+        try:
+            # Check if client is available
+            if not self.client:
+                logger.warning("No client available")
+                return []
+            
+            # Get webhooks
+            webhooks = self.client.get_webhooks()
+            
+            return webhooks
+        
+        except Exception as e:
+            logger.error(f"Error getting webhooks: {str(e)}", exc_info=True)
+            return []
+
+
+def get_webhook_manager(client=None):
+    """
+    Get the global webhook manager instance.
+    
+    Args:
+        client: Box client instance
+        
+    Returns:
+        WebhookManager: Global webhook manager instance
+    """
+    global _webhook_manager
+    
+    if _webhook_manager is None:
+        _webhook_manager = WebhookManager(client)
+    elif client is not None:
+        _webhook_manager.client = client
+    
+    return _webhook_manager

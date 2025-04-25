@@ -239,12 +239,12 @@ class AutomatedWorkflowConfig:
         # Save config
         return self._save_config()
     
-    def get_webhook_enabled(self) -> bool:
+    def is_webhook_enabled(self) -> bool:
         """
-        Get webhook enabled.
+        Check if webhook is enabled.
         
         Returns:
-            bool: Webhook enabled
+            bool: True if enabled, False otherwise
         """
         return self.config.get("webhook_enabled", True)
     
@@ -289,15 +289,46 @@ class AutomatedWorkflowConfig:
         
         # Save config
         return self._save_config()
+    
+    def is_enabled(self) -> bool:
+        """
+        Check if automated workflow is enabled.
+        
+        Returns:
+            bool: True if enabled, False otherwise
+        """
+        return self.config.get("enabled", False)
+    
+    def set_enabled(self, enabled: bool) -> bool:
+        """
+        Set automated workflow enabled.
+        
+        Args:
+            enabled: Automated workflow enabled
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        # Set enabled
+        self.config["enabled"] = enabled
+        
+        # Save config
+        return self._save_config()
 
 
 class ConfigurationInterface:
     """
-    Configuration interface for the Box Metadata Extraction application.
+    Configuration interface for the application.
     """
     
-    def __init__(self):
-        """Initialize configuration interface."""
+    def __init__(self, client=None):
+        """
+        Initialize the configuration interface.
+        
+        Args:
+            client: Box client instance
+        """
+        self.client = client
         self.config = AutomatedWorkflowConfig()
         logger.info("ConfigurationInterface initialized")
     
@@ -530,11 +561,14 @@ class ConfigurationInterface:
                 st.warning("No metadata templates found. Please create templates in Box.")
                 return
             
+            # Convert templates dict to list for selectbox
+            template_list = list(templates.values())
+            
             # Category input
             category = st.text_input("Document Category", key="new_category")
             
             # Template selection
-            template_options = [f"{t['displayName']} ({t['id']})" for t in templates]
+            template_options = [f"{t['displayName']} ({t['id']})" for t in template_list]
             template_index = st.selectbox("Metadata Template", options=range(len(template_options)), format_func=lambda i: template_options[i], key="new_template")
             
             # Add mapping button
@@ -543,7 +577,7 @@ class ConfigurationInterface:
                     st.error("Please enter a document category.")
                     return
                 
-                template_id = templates[template_index]["id"]
+                template_id = template_list[template_index]["id"]
                 
                 if self.config.set_category_template_mapping(category, template_id):
                     st.success(f"Added mapping for category '{category}'.")
@@ -611,83 +645,110 @@ class ConfigurationInterface:
                 value=settings.get("confidence_threshold", 0.7),
                 step=0.05,
                 format="%.2f",
-                help="Minimum confidence score required for metadata extraction."
+                help="Minimum confidence score required for document categorization"
             )
             
             # Auto apply metadata
-            auto_apply = st.checkbox(
+            auto_apply_metadata = st.checkbox(
                 "Auto Apply Metadata",
                 value=settings.get("auto_apply_metadata", False),
-                help="Automatically apply extracted metadata to files without manual review."
+                help="Automatically apply extracted metadata to files"
             )
             
             # Notification settings
             notification_enabled = st.checkbox(
-                "Enable Email Notifications",
+                "Enable Notifications",
                 value=settings.get("notification_enabled", False),
-                help="Send email notifications when metadata is extracted."
+                help="Send email notifications for processed files"
             )
             
+            # Email input
             notification_email = st.text_input(
                 "Notification Email",
                 value=settings.get("notification_email", ""),
                 disabled=not notification_enabled,
-                help="Email address to send notifications to."
+                help="Email address to send notifications to"
             )
             
-            # Update settings button
-            if st.button("Update Settings", use_container_width=True):
+            # Webhook port
+            webhook_port = st.number_input(
+                "Webhook Port",
+                min_value=1000,
+                max_value=65535,
+                value=self.config.get_webhook_port(),
+                step=1,
+                help="Port to use for webhook server"
+            )
+            
+            # Webhook enabled
+            webhook_enabled = st.checkbox(
+                "Enable Webhook",
+                value=self.config.is_webhook_enabled(),
+                help="Enable webhook server for Box events"
+            )
+            
+            # Save button
+            if st.button("Save Advanced Settings", use_container_width=True):
                 # Update settings
                 self.config.set_advanced_setting("confidence_threshold", confidence_threshold)
-                self.config.set_advanced_setting("auto_apply_metadata", auto_apply)
+                self.config.set_advanced_setting("auto_apply_metadata", auto_apply_metadata)
                 self.config.set_advanced_setting("notification_enabled", notification_enabled)
+                self.config.set_advanced_setting("notification_email", notification_email)
+                self.config.set_webhook_port(webhook_port)
+                self.config.set_webhook_enabled(webhook_enabled)
                 
-                if notification_enabled:
-                    self.config.set_advanced_setting("notification_email", notification_email)
-                
-                st.success("Advanced settings updated successfully.")
+                st.success("Advanced settings saved successfully.")
                 st.rerun()
         except Exception as e:
             logger.error(f"Error rendering advanced settings: {str(e)}", exc_info=True)
             st.error(f"Error rendering advanced settings: {str(e)}")
 
 
-# Standalone functions for use in app.py
+# Global instance
+_config_interface = None
 
+def get_configuration_interface(client=None) -> ConfigurationInterface:
+    """
+    Get the global configuration interface instance.
+    
+    Args:
+        client: Box client instance
+        
+    Returns:
+        ConfigurationInterface: Global configuration interface instance
+    """
+    global _config_interface
+    
+    if _config_interface is None:
+        _config_interface = ConfigurationInterface(client)
+    elif client is not None:
+        _config_interface.client = client
+    
+    return _config_interface
+
+def get_automated_workflow_config() -> AutomatedWorkflowConfig:
+    """
+    Get the automated workflow configuration.
+    
+    Returns:
+        AutomatedWorkflowConfig: Automated workflow configuration
+    """
+    return get_configuration_interface().config
+
+# Standalone wrapper functions for use in app.py
 def render_workflow_selection():
     """
-    Standalone function to render workflow selection interface.
-    This is a wrapper around the ConfigurationInterface.render_workflow_selection method.
+    Standalone wrapper for render_workflow_selection.
     
     Returns:
         str: Selected workflow mode
     """
     logger.info("Calling render_workflow_selection standalone function")
-    
-    # Create configuration interface instance
-    config_interface = ConfigurationInterface()
-    
-    # Call instance method and return result
-    return config_interface.render_workflow_selection()
+    return get_configuration_interface().render_workflow_selection()
 
 def render_configuration_interface():
     """
-    Standalone function to render configuration interface.
-    This is a wrapper around the ConfigurationInterface.render_configuration_interface method.
+    Standalone wrapper for render_configuration_interface.
     """
     logger.info("Calling render_configuration_interface standalone function")
-    
-    # Create configuration interface instance
-    config_interface = ConfigurationInterface()
-    
-    # Call instance method
-    config_interface.render_configuration_interface()
-
-def get_automated_workflow_config():
-    """
-    Get automated workflow configuration.
-    
-    Returns:
-        AutomatedWorkflowConfig: Automated workflow configuration
-    """
-    return AutomatedWorkflowConfig()
+    get_configuration_interface().render_configuration_interface()
