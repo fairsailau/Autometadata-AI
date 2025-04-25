@@ -1,3 +1,8 @@
+"""
+Authentication module for Box metadata extraction.
+This module provides authentication functionality for the Box metadata extraction application.
+"""
+
 import streamlit as st
 from boxsdk import OAuth2, Client, JWTAuth
 import os
@@ -11,15 +16,18 @@ logging.basicConfig(level=logging.INFO,
                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def authenticate():
+def render_authentication():
     """
     Handle Box authentication using OAuth2 or JWT
+    
+    Returns:
+        Client: Box client if authentication is successful, None otherwise
     """
     st.title("Box Authentication")
     
     # Check if already authenticated
     if st.session_state.authenticated and st.session_state.client:
-        st.success(f"You are already authenticated as {st.session_state.user.name}!")
+        st.success(f"You are already authenticated as {st.session_state.get('user', {}).get('name', 'DCP Admin')}!")
         # Return the client so it can be used by the application
         return st.session_state.client
     
@@ -39,13 +47,13 @@ def authenticate():
     )
     
     if auth_method == "OAuth 2.0":
-        return oauth2_authentication()
+        return authenticate_with_oauth()
     elif auth_method == "JWT":
-        return jwt_authentication()
+        return authenticate_with_jwt()
     else:
-        return developer_token_authentication()
+        return authenticate_with_developer_token()
 
-def oauth2_authentication():
+def authenticate_with_oauth():
     """
     Implement OAuth 2.0 authentication flow
     
@@ -148,7 +156,7 @@ def oauth2_authentication():
     # Return None if authentication is not completed
     return None
 
-def jwt_authentication():
+def authenticate_with_jwt():
     """
     Implement JWT authentication flow
     
@@ -234,7 +242,7 @@ def jwt_authentication():
     # Return None if authentication is not completed
     return None
 
-def developer_token_authentication():
+def authenticate_with_developer_token():
     """
     Implement developer token authentication (for testing only)
     
@@ -367,28 +375,7 @@ with st.expander("How to create a Box app and get credentials"):
     2. Under "App Access Level", select "App + Enterprise Access"
     3. Under "Advanced Features", enable "Generate User Access Tokens"
     4. Save changes
-    5. Under "Configuration", click "Generate a Public/Private Keypair"
-    6. This will download a config.json file with your credentials
-    7. Use this file for JWT authentication
+    5. Under "Configuration", click "Generate a Public/Private Key Pair"
+    6. Download the JSON file
+    7. Use this JSON file for JWT authentication
     """)
-
-# Add debug functionality
-if st.sidebar.checkbox("Debug Authentication"):
-    st.sidebar.write("### Authentication Debug")
-    
-    st.sidebar.write("**Session State Keys:**")
-    st.sidebar.write(list(st.session_state.keys()))
-    
-    if "authenticated" in st.session_state:
-        st.sidebar.write(f"**Authenticated:** {st.session_state.authenticated}")
-    
-    if "client" in st.session_state:
-        st.sidebar.write("**Client:** Available")
-    else:
-        st.sidebar.write("**Client:** Not available")
-    
-    if "auth_credentials" in st.session_state:
-        st.sidebar.write("**Auth Credentials Keys:**")
-        st.sidebar.write(list(st.session_state.auth_credentials.keys()))
-    else:
-        st.sidebar.write("**Auth Credentials:** Not available")
