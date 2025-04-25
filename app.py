@@ -42,6 +42,29 @@ from modules.integration import (
     is_event_stream_running
 )
 
+def render_home_page(client):
+    """Render the home page content."""
+    st.write("Welcome to Box Metadata Extraction!")
+    st.write("This application helps you extract metadata from Box files using AI and apply it back to the files.")
+    st.write("To get started, authenticate with Box using the sidebar and then navigate to the File Browser.")
+    
+    # Display user journey guide
+    from modules.user_journey_guide import user_journey_guide, display_step_help
+    user_journey_guide("Home")
+    display_step_help("Home")
+    
+    # Display status
+    if client and st.session_state.authenticated:
+        st.success("✅ Authentication successful! You can now browse your Box files.")
+        st.write("Click on 'File Browser' in the sidebar to continue.")
+        
+        # Add a direct navigation button to make progression easier
+        if st.button("Go to File Browser", type="primary", use_container_width=True):
+            st.session_state.current_page = "File Browser"
+            st.rerun()
+    else:
+        st.warning("⚠️ Please authenticate with Box to continue.")
+
 def main():
     """Main application function."""
     # Initialize session state
@@ -62,6 +85,13 @@ def main():
         
         # Display authentication section
         client = authenticate()
+        
+        # Force navigation to Home page after successful authentication
+        if client and st.session_state.authenticated and st.session_state.current_page == "Home":
+            # This is a newly authenticated session, trigger a rerun to ensure proper rendering
+            if "just_authenticated" not in st.session_state:
+                st.session_state.just_authenticated = True
+                st.rerun()
         
         # Display automated workflow configuration if selected and authenticated
         if workflow_mode == "automated" and client and st.session_state.authenticated:
@@ -98,55 +128,104 @@ def main():
         st.write("© 2024 Box Metadata Extraction")
         st.write("Version 2.0.0")
     
-    # Display main content based on current page
+    # Get current page
+    current_page = st.session_state.current_page
+    
+    # Display page header
+    st.header(f"{current_page}")
+    
+    # Display main content based on workflow mode and current page
     if workflow_mode == "manual":
-        # Get current page
-        current_page = st.session_state.current_page
-        
-        # Display page content
-        st.header(f"{current_page}")
-        
         # Home page
         if current_page == "Home":
-            st.write("Welcome to Box Metadata Extraction!")
-            st.write("This application helps you extract metadata from Box files using AI and apply it back to the files.")
-            st.write("To get started, authenticate with Box using the sidebar and then navigate to the File Browser.")
-            
-            # Display user journey guide
-            from modules.user_journey_guide import user_journey_guide, display_step_help
-            user_journey_guide(current_page)
-            display_step_help(current_page)
-            
-            # Display status
-            if client and st.session_state.authenticated:
-                st.success("✅ Authentication successful! You can now browse your Box files.")
-                st.write("Click on 'File Browser' in the sidebar to continue.")
-            else:
-                st.warning("⚠️ Please authenticate with Box to continue.")
+            render_home_page(client)
         
         # File Browser page
         elif current_page == "File Browser":
-            file_browser()
+            if client and st.session_state.authenticated:
+                file_browser()
+            else:
+                st.warning("⚠️ Please authenticate with Box to browse files.")
+                if st.button("Go to Authentication", type="primary"):
+                    st.session_state.current_page = "Home"
+                    st.rerun()
         
         # Document Categorization page
         elif current_page == "Document Categorization":
-            document_categorization()
+            if client and st.session_state.authenticated:
+                document_categorization()
+            else:
+                st.warning("⚠️ Please authenticate with Box to categorize documents.")
+                if st.button("Go to Authentication", type="primary"):
+                    st.session_state.current_page = "Home"
+                    st.rerun()
         
         # Metadata Configuration page
         elif current_page == "Metadata Configuration":
-            metadata_config()
+            if client and st.session_state.authenticated:
+                metadata_config()
+            else:
+                st.warning("⚠️ Please authenticate with Box to configure metadata.")
+                if st.button("Go to Authentication", type="primary"):
+                    st.session_state.current_page = "Home"
+                    st.rerun()
         
         # Process Files page
         elif current_page == "Process Files":
-            process_files()
+            if client and st.session_state.authenticated:
+                process_files()
+            else:
+                st.warning("⚠️ Please authenticate with Box to process files.")
+                if st.button("Go to Authentication", type="primary"):
+                    st.session_state.current_page = "Home"
+                    st.rerun()
         
         # View Results page
         elif current_page == "View Results":
-            view_results()
+            if client and st.session_state.authenticated:
+                view_results()
+            else:
+                st.warning("⚠️ Please authenticate with Box to view results.")
+                if st.button("Go to Authentication", type="primary"):
+                    st.session_state.current_page = "Home"
+                    st.rerun()
         
         # Apply Metadata page
         elif current_page == "Apply Metadata":
-            apply_metadata_direct(client)
+            if client and st.session_state.authenticated:
+                apply_metadata_direct(client)
+            else:
+                st.warning("⚠️ Please authenticate with Box to apply metadata.")
+                if st.button("Go to Authentication", type="primary"):
+                    st.session_state.current_page = "Home"
+                    st.rerun()
+    
+    # Display content for automated workflow mode
+    elif workflow_mode == "automated":
+        if client and st.session_state.authenticated:
+            st.write("Configure your automated workflow using the sidebar options.")
+            
+            # Display automated workflow status
+            if is_event_stream_running():
+                st.info("🔄 Automated workflow is running. New files in monitored folders will be processed automatically.")
+                
+                # Add stop button
+                if st.button("Stop Automated Workflow", type="primary", use_container_width=True):
+                    shutdown_automated_workflow()
+                    st.rerun()
+            else:
+                st.warning("⚠️ Automated workflow is not running.")
+                
+                # Add start button if configuration is valid
+                config = get_automated_workflow_config()
+                if config and config.get_monitored_folders():
+                    if st.button("Start Automated Workflow", type="primary", use_container_width=True):
+                        initialize_automated_workflow(client)
+                        st.rerun()
+                else:
+                    st.error("⛔ Please configure monitored folders in the sidebar before starting the automated workflow.")
+        else:
+            st.warning("⚠️ Please authenticate with Box to configure and start the automated workflow.")
 
 if __name__ == "__main__":
     main()

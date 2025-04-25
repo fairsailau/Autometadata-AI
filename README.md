@@ -1,85 +1,57 @@
-# Box Metadata Extraction Application - Automated Workflow
+# Box Metadata Extraction with AI
 
-This README provides an overview of the enhanced Box Metadata Extraction application with automated workflow capabilities.
+This application helps you extract metadata from Box files using AI and apply it back to the files.
 
-## Overview
+## Features
 
-The Box Metadata Extraction application now supports two workflow modes:
+- **Authentication**: Connect to Box using OAuth 2.0, JWT, or Developer Token
+- **Manual Workflow**: Browse files, categorize documents, configure metadata, process files, view results, and apply metadata
+- **Automated Workflow**: Configure monitored folders, template mapping, AI model, and advanced settings for automated processing
+- **AI-Powered Extraction**: Extract metadata from documents using AI models
+- **Metadata Application**: Apply extracted metadata back to Box files
 
-1. **Manual Processing** - The original workflow where users manually select files, configure metadata, process files, review results, and apply metadata.
-2. **Automated Processing** - A new event-driven workflow that automatically processes files uploaded to monitored Box folders.
+## Installation
 
-## Automated Workflow Features
+1. Clone the repository:
+```bash
+git clone https://github.com/fairsailau/Autometadata-AI.git
+```
 
-- **Event-Driven Processing**: Automatically processes files as they are uploaded to monitored Box folders
-- **Confidence-Based Routing**: Routes documents with high confidence scores to automated processing and flags low-confidence documents for manual review
-- **Configurable Mapping**: Allows users to define mappings between document categories and metadata templates
-- **Monitoring Dashboard**: Provides visibility into processing status, review queue, and processing history
-- **Flexible Configuration**: Supports customization of monitored folders, AI models, confidence thresholds, and more
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
-## Components
+3. Run the application:
+```bash
+streamlit run app.py
+```
 
-The automated workflow consists of the following components:
+## Usage
 
-- **Event Stream Integration**: Handles Box webhooks and event processing
-- **Automated Categorization**: Categorizes documents and routes them based on confidence
-- **Template Processing**: Maps categories to templates and applies metadata
-- **Configuration Interface**: Provides UI for configuring the automated workflow
-- **Integration Layer**: Connects automated workflow components with the existing application
-
-## Getting Started
-
-1. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-
-2. Run the application:
-   ```
-   streamlit run app.py
-   ```
-
-3. Authenticate with Box and select the workflow mode (Manual or Automated)
-
-4. For automated workflow:
+1. **Authentication**: Connect to Box using OAuth 2.0, JWT, or Developer Token
+2. **Select Workflow Mode**: Choose between Manual and Automated workflow
+3. **Manual Workflow**:
+   - Browse files
+   - Categorize documents
+   - Configure metadata
+   - Process files
+   - View results
+   - Apply metadata
+4. **Automated Workflow**:
    - Configure monitored folders
-   - Set up category-to-template mappings
-   - Adjust confidence threshold and other settings
-   - Monitor processing through the dashboard
+   - Set up template mapping
+   - Select AI model
+   - Configure advanced settings
+   - Start automated workflow
 
-## Configuration
+## Recent Updates
 
-The automated workflow can be configured through the Configuration interface, which includes:
+- Fixed authentication flow to ensure proper navigation after successful login
+- Improved page transition logic for both manual and automated workflows
+- Enhanced user experience with direct navigation buttons and clear status messages
+- Added comprehensive error handling and user feedback throughout the application
 
-- **Folder Selection**: Select Box folders to monitor for new file uploads
-- **AI Model Configuration**: Choose AI model and set confidence threshold
-- **Template Mapping**: Define mappings between document categories and metadata templates
-- **Advanced Settings**: Configure webhook settings and other advanced options
+## License
 
-## Monitoring
-
-The monitoring dashboard provides visibility into the automated workflow:
-
-- **Processing Status**: View overall status and metrics
-- **Review Queue**: Review and approve/reject low-confidence documents
-- **Processing History**: View history of processed documents
-
-## Testing
-
-Run the automated workflow tests:
-```
-python -m unittest tests.test_automated_workflow
-```
-
-## Requirements
-
-- Python 3.7+
-- Streamlit 1.22.0+
-- Box SDK 3.9.0+
-- Other dependencies listed in requirements.txt
-
-## Notes
-
-- For webhook functionality, your server needs to be publicly accessible
-- Configure proper security for webhook endpoints in production environments
-- Consider using a reverse proxy for HTTPS support
+© 2024 Box Metadata Extraction
