@@ -28,7 +28,7 @@ from modules.metadata_config import metadata_config
 from modules.processing import process_files
 from modules.results_viewer import view_results
 from modules.direct_metadata_application_enhanced_fixed import apply_metadata_direct
-from modules.session_state_manager import initialize_session_state, get_session_state
+from modules.session_state_manager import initialize_session_state, get_session_state, debug_session_state
 
 # Import automated workflow modules
 from modules.configuration_interface import (
@@ -73,6 +73,10 @@ def main():
     # Get session state
     session_state = get_session_state()
     
+    # Add debugging - dump session state at the beginning of each render
+    debug_info = debug_session_state()
+    logger.info(f"Session state at start of main(): {debug_info}")
+    
     # Display sidebar
     with st.sidebar:
         # Display application title
@@ -80,23 +84,31 @@ def main():
         st.write("Extract and apply metadata to Box files using AI")
         st.write("---")
         
-        # Display workflow selection
+        # Display workflow selection - store the returned workflow mode
         workflow_mode = render_workflow_selection()
+        logger.info(f"Workflow mode after render_workflow_selection: {workflow_mode}")
         
         # Display authentication section
         client = authenticate()
         
+        # Log authentication status
+        logger.info(f"Authentication status: authenticated={st.session_state.authenticated}, client={'present' if client else 'None'}")
+        
         # Force navigation to Home page after successful authentication
-        if client and st.session_state.authenticated and st.session_state.current_page == "Home":
+        if client and st.session_state.authenticated:
+            # Store client in session state to ensure it's available throughout the app
+            st.session_state.client = client
+            logger.info("Client stored in session state")
+            
             # This is a newly authenticated session, trigger a rerun to ensure proper rendering
             if "just_authenticated" not in st.session_state:
+                logger.info("Setting just_authenticated flag and triggering rerun")
                 st.session_state.just_authenticated = True
                 st.rerun()
         
         # Display automated workflow configuration if selected and authenticated
         if workflow_mode == "automated" and client and st.session_state.authenticated:
-            # Ensure client is available in session state
-            st.session_state.client = client
+            logger.info("Rendering automated workflow configuration")
             render_configuration_interface()
         elif workflow_mode == "automated" and not (client and st.session_state.authenticated):
             st.warning("Please authenticate with Box to configure automated workflow.")
@@ -120,6 +132,7 @@ def main():
             # Create navigation buttons
             for page, icon in pages.items():
                 if st.button(f"{icon} {page}", key=f"nav_{page}", use_container_width=True):
+                    logger.info(f"Navigation button clicked: {page}")
                     st.session_state.current_page = page
                     st.rerun()
         
@@ -130,12 +143,15 @@ def main():
     
     # Get current page
     current_page = st.session_state.current_page
+    logger.info(f"Current page: {current_page}")
     
     # Display page header
     st.header(f"{current_page}")
     
     # Display main content based on workflow mode and current page
     if workflow_mode == "manual":
+        logger.info(f"Rendering manual workflow content for page: {current_page}")
+        
         # Home page
         if current_page == "Home":
             render_home_page(client)
@@ -202,6 +218,7 @@ def main():
     
     # Display content for automated workflow mode
     elif workflow_mode == "automated":
+        logger.info("Rendering automated workflow content")
         if client and st.session_state.authenticated:
             st.write("Configure your automated workflow using the sidebar options.")
             
@@ -226,6 +243,10 @@ def main():
                     st.error("⛔ Please configure monitored folders in the sidebar before starting the automated workflow.")
         else:
             st.warning("⚠️ Please authenticate with Box to configure and start the automated workflow.")
+    
+    # Add debugging - dump session state at the end of each render
+    end_debug_info = debug_session_state()
+    logger.info(f"Session state at end of main(): {end_debug_info}")
 
 if __name__ == "__main__":
     main()
