@@ -20,7 +20,8 @@ def authenticate():
     # Check if already authenticated
     if st.session_state.authenticated and st.session_state.client:
         st.success(f"You are already authenticated as {st.session_state.user.name}!")
-        return
+        # Return the client so it can be used by the application
+        return st.session_state.client
     
     st.write("""
     ## Connect to Box
@@ -38,15 +39,18 @@ def authenticate():
     )
     
     if auth_method == "OAuth 2.0":
-        oauth2_authentication()
+        return oauth2_authentication()
     elif auth_method == "JWT":
-        jwt_authentication()
+        return jwt_authentication()
     else:
-        developer_token_authentication()
+        return developer_token_authentication()
 
 def oauth2_authentication():
     """
     Implement OAuth 2.0 authentication flow
+    
+    Returns:
+        Client: Box client if authentication is successful, None otherwise
     """
     with st.form("oauth2_form"):
         st.subheader("OAuth 2.0 Authentication")
@@ -60,6 +64,7 @@ def oauth2_authentication():
         if submitted:
             if not client_id or not client_secret:
                 st.error("Please provide both Client ID and Client Secret")
+                return None
             else:
                 try:
                     # Initialize OAuth2 object
@@ -117,24 +122,38 @@ def oauth2_authentication():
                                 st.session_state.client = client
                                 st.session_state.user = current_user
                                 
+                                # Set the current page to "Home" to ensure proper navigation after authentication
+                                st.session_state.current_page = "Home"
+                                
                                 # Log authentication success
                                 logger.info(f"Successfully authenticated as {current_user.name}")
                                 
                                 st.success(f"Successfully authenticated as {current_user.name}!")
-                                st.rerun()
+                                
+                                # Return the client so it can be used immediately
+                                return client
                             else:
                                 st.error("Could not find authorization code in the URL")
+                                return None
                         except Exception as e:
                             st.error(f"Error processing authorization: {str(e)}")
                             logger.error(f"Error processing authorization: {str(e)}")
+                            return None
                 
                 except Exception as e:
                     st.error(f"Authentication initialization failed: {str(e)}")
                     logger.error(f"Authentication initialization failed: {str(e)}")
+                    return None
+    
+    # Return None if authentication is not completed
+    return None
 
 def jwt_authentication():
     """
     Implement JWT authentication flow
+    
+    Returns:
+        Client: Box client if authentication is successful, None otherwise
     """
     with st.form("jwt_form"):
         st.subheader("JWT Authentication")
@@ -191,6 +210,9 @@ def jwt_authentication():
                 st.session_state.client = client
                 st.session_state.user = service_account
                 
+                # Set the current page to "Home" to ensure proper navigation after authentication
+                st.session_state.current_page = "Home"
+                
                 # Store JWT config for re-authentication
                 if "auth_credentials" not in st.session_state:
                     st.session_state.auth_credentials = {}
@@ -200,15 +222,24 @@ def jwt_authentication():
                 logger.info(f"Successfully authenticated as {service_account.name} (Service Account)")
                 
                 st.success(f"Successfully authenticated as {service_account.name} (Service Account)!")
-                st.rerun()
+                
+                # Return the client so it can be used immediately
+                return client
             
             except Exception as e:
                 st.error(f"JWT Authentication failed: {str(e)}")
                 logger.error(f"JWT Authentication failed: {str(e)}")
+                return None
+    
+    # Return None if authentication is not completed
+    return None
 
 def developer_token_authentication():
     """
     Implement developer token authentication (for testing only)
+    
+    Returns:
+        Client: Box client if authentication is successful, None otherwise
     """
     with st.form("dev_token_form"):
         st.subheader("Developer Token Authentication")
@@ -224,6 +255,7 @@ def developer_token_authentication():
         if submitted:
             if not client_id or not client_secret or not developer_token:
                 st.error("Please provide Client ID, Client Secret, and Developer Token")
+                return None
             else:
                 try:
                     # Initialize OAuth2 with developer token
@@ -231,7 +263,7 @@ def developer_token_authentication():
                         client_id=client_id,
                         client_secret=client_secret,
                         access_token=developer_token,
-                        store_tokens=store_tokens  # Added store_tokens parameter
+                        store_tokens=store_tokens
                     )
                     
                     # Store credentials for re-authentication
@@ -252,15 +284,24 @@ def developer_token_authentication():
                     st.session_state.client = client
                     st.session_state.user = current_user
                     
+                    # Set the current page to "Home" to ensure proper navigation after authentication
+                    st.session_state.current_page = "Home"
+                    
                     # Log authentication success
                     logger.info(f"Successfully authenticated as {current_user.name}")
                     
                     st.success(f"Successfully authenticated as {current_user.name}!")
-                    st.rerun()
+                    
+                    # Return the client so it can be used immediately
+                    return client
                 
                 except Exception as e:
                     st.error(f"Authentication failed: {str(e)}")
                     logger.error(f"Authentication failed: {str(e)}")
+                    return None
+    
+    # Return None if authentication is not completed
+    return None
 
 def store_tokens(access_token, refresh_token=None):
     """
